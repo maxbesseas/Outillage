@@ -1,0 +1,38 @@
+# Environnements Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Dépendances JS
+node_modules/
+
+# Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Données : ne jamais versionner (le dépôt est public)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+backend/backups/
+backend/uploads/
+Source/
+*.xlsx
+*.xls
+*.zip
+
+# Divers
+*.log
+.vercel/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
