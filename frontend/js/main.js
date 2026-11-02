@@ -4,7 +4,7 @@ import { openGlobalSearch, initGlobalSearchShortcut } from "./globalSearch.js";
 import { state, isLoggedIn, isAdmin, isManager, clearSession } from "./state.js";
 import { api } from "./api.js";
 import { wireImageFallbacks, escapeHtml, startAccessibleForms } from "./ui.js";
-import { startNotificationPolling, stopNotificationPolling } from "./notifications.js";
+import { startNotificationPolling, stopNotificationPolling, refreshNotificationCount } from "./notifications.js";
 import { icon } from "./icons.js";
 import { initAssistant, destroyAssistant } from "./assistant.js";
 
@@ -45,24 +45,123 @@ import { renderToolSheet, renderCodeRedirect } from "./views/toolSheet.js";
 import { renderScan, renderSync, scanAndOpen } from "./views/scan.js";
 import { startOfflineSync, onQueueChange } from "./offlineQueue.js";
 
-const NAV_ITEMS = [
+const PRIMARY_NAV = [
   { path: "/", label: "Accueil", icon: "home" },
-  { path: "/mes-outils", label: "Mes outils", icon: "grid" },
   { path: "/agence", label: "Agence", icon: "building" },
   { path: "/reservations", label: "Réservations", icon: "calendar" },
-  { path: "/transferts", label: "Prêts externes", icon: "exchange" },
-  { path: "/entre-collegues", label: "Collègues", icon: "userCheck" },
   { path: "/inventaire", label: "Inventaire", icon: "clipboard" },
-  { path: "/epi", label: "EPI", icon: "shield" },
   { path: "/controles", label: "Contrôles", icon: "check" },
-  { path: "/notifications", label: "Alertes", icon: "bell", badge: true },
-  { path: "/chantiers", label: "Chantiers", icon: "building" },
-  { path: "/maintenance", label: "Maintenance", icon: "tool", managerOnly: true },
-  { path: "/planification", label: "Planification", icon: "calendar", managerOnly: true },
-  { path: "/utilisateurs", label: "Équipe", icon: "users", managerOnly: true },
-  { path: "/utilisation", label: "Utilisation", icon: "chart", managerOnly: true },
-  { path: "/finances", label: "Finances", icon: "chart", managerOnly: true },
 ];
+
+const MORE_NAV = [
+  {
+    title: "Outillage",
+    items: [
+      { path: "/mes-outils", label: "Mes outils", icon: "grid" },
+      { path: "/epi", label: "EPI", icon: "shield" },
+      { path: "/transferts", label: "Prêts externes", icon: "exchange" },
+      { path: "/entre-collegues", label: "Collègues", icon: "userCheck" },
+      { path: "/chantiers", label: "Chantiers", icon: "building" },
+    ],
+  },
+  {
+    title: "Suivi",
+    items: [
+      { path: "/maintenance", label: "Maintenance", icon: "tool", managerOnly: true },
+      { path: "/planification", label: "Planification", icon: "calendar", managerOnly: true },
+      { path: "/utilisation", label: "Utilisation", icon: "chart", managerOnly: true },
+      { path: "/finances", label: "Finances", icon: "chart", managerOnly: true },
+      { path: "/utilisateurs", label: "Équipe", icon: "users", managerOnly: true },
+    ],
+  },
+];
+
+// Sur téléphone, l'inventaire rejoint le menu « Plus » pour garder des cibles larges.
+const PHONE_NAV = PRIMARY_NAV.filter((item) => item.path !== "/inventaire");
+
+function isCurrent(path, current) {
+  return path === current || (path !== "/" && current.startsWith(`${path}/`));
+}
+
+function moreGroups(extra = []) {
+  const groups = MORE_NAV.map((group) => ({ ...group, items: group.items.filter((item) => !item.managerOnly || isManager()) }));
+  groups[0].items = [...extra, ...groups[0].items];
+  return groups.filter((group) => group.items.length);
+}
+
+function morePanel(id, groups) {
+  return `
+    <div id="${id}" class="menu-panel menu-panel-more hidden">
+      ${groups
+        .map(
+          (group) => `
+            <div class="menu-group">
+              <p class="menu-group-title">${group.title}</p>
+              ${group.items
+                .map((item) => `<a href="#${item.path}" class="menu-item nav-link" data-path="${item.path}">${icon(item.icon, { size: 20 })}<span>${item.label}</span></a>`)
+                .join("")}
+            </div>`
+        )
+        .join("")}
+    </div>`;
+}
+
+function desktopNav(current) {
+  const groups = moreGroups();
+  const moreActive = groups.some((group) => group.items.some((item) => isCurrent(item.path, current)));
+  return `
+    ${PRIMARY_NAV.map((item) => `<a href="#${item.path}" class="nav-link" data-path="${item.path}">${item.label}</a>`).join("")}
+    <div class="menu-anchor">
+      <button type="button" class="nav-link nav-more${moreActive ? " active" : ""}" data-menu-toggle="menu-more" aria-haspopup="true" aria-expanded="false" aria-controls="menu-more">
+        <span>Plus</span>${icon("chevronDown", { size: 16 })}
+      </button>
+      ${morePanel("menu-more", groups)}
+    </div>`;
+}
+
+function phoneNav(current) {
+  const inventory = PRIMARY_NAV.filter((item) => item.path === "/inventaire");
+  const groups = moreGroups(inventory);
+  const moreActive = groups.some((group) => group.items.some((item) => isCurrent(item.path, current)));
+  return `
+    ${PHONE_NAV.map((item) => `<a href="#${item.path}" class="nav-link" data-path="${item.path}">${icon(item.icon, { size: 22 })}<span>${item.label}</span></a>`).join("")}
+    <button type="button" class="nav-link nav-more${moreActive ? " active" : ""}" data-menu-toggle="menu-more-phone" aria-haspopup="true" aria-expanded="false" aria-controls="menu-more-phone">
+      ${icon("menu", { size: 22 })}<span>Plus</span>
+    </button>
+    ${morePanel("menu-more-phone", groups)}`;
+}
+
+function initials(name) {
+  const letters = String(name || "").trim().split(/\s+/).slice(0, 2).map((part) => part[0] || "").join("");
+  return escapeHtml(letters.toUpperCase() || "?");
+}
+
+function closeMenus(except = null) {
+  document.querySelectorAll("[data-menu-toggle]").forEach((toggle) => {
+    if (toggle === except) return;
+    toggle.setAttribute("aria-expanded", "false");
+    document.getElementById(toggle.dataset.menuToggle)?.classList.add("hidden");
+  });
+}
+
+function wireMenus() {
+  document.addEventListener("click", (event) => {
+    const toggle = event.target.closest("[data-menu-toggle]");
+    closeMenus(toggle);
+    if (!toggle) return;
+    const panel = document.getElementById(toggle.dataset.menuToggle);
+    const opening = panel.classList.contains("hidden");
+    panel.classList.toggle("hidden", !opening);
+    toggle.setAttribute("aria-expanded", String(opening));
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const open = document.querySelector('[data-menu-toggle][aria-expanded="true"]');
+    if (!open) return;
+    closeMenus();
+    open.focus();
+  });
+}
 
 registerRoute("/login", renderLogin);
 registerRoute("/mot-de-passe-oublie", renderForgotPassword);
@@ -106,19 +205,6 @@ registerRoute("/code/:code", renderCodeRedirect);
 registerRoute("/scan", renderScan);
 registerRoute("/synchronisation", renderSync);
 
-function navLinks() {
-  return NAV_ITEMS.filter((item) => !item.managerOnly || isManager())
-    .map(
-      (item) => `
-        <a href="#${item.path}" class="nav-link" data-path="${item.path}">
-          ${icon(item.icon, { size: 20 })}
-          <span>${item.label}</span>
-          ${item.badge ? '<span class="bell-badge hidden" data-bell-badge></span>' : ""}
-        </a>`
-    )
-    .join("");
-}
-
 function buildChrome() {
   const header = document.getElementById("app-header");
   const mobileNav = document.getElementById("mobile-nav");
@@ -137,25 +223,42 @@ function buildChrome() {
   startNotificationPolling();
   startOfflineSync();
 
+  const current = (location.hash.slice(1) || "/").split("?")[0];
+  const fullName = state.user ? state.user.full_name : "";
   header.innerHTML = `
     <div class="header-inner">
-      <div class="header-brand">
-        <div class="logo-box"><img src="/icons/fauche-logo-full.png" alt="Fauché" data-fallback-hide/></div>
+      <a href="#/" class="header-brand" aria-label="Fauché, accueil">
+        <span class="logo-box"><img src="/icons/fauche-logo-full.png" alt="" data-fallback-hide/></span>
         <span class="header-title">Gestion Outillage</span>
-      </div>
-      <nav class="header-nav">${navLinks()}</nav>
+      </a>
+      <nav class="header-nav" aria-label="Navigation principale">${desktopNav(current)}</nav>
       <div class="header-user">
-        <button class="btn btn-ghost btn-sm" id="search-global" aria-label="Rechercher (touche /)">${icon("search", { size: 18 })}<span class="header-label">Rechercher</span></button>
-        <button class="btn btn-ghost btn-sm" id="scan-global" aria-label="Scanner un outil">${icon("camera", { size: 18 })}<span class="header-label">Scanner</span></button>
         <a href="#/synchronisation" class="sync-pill hidden" id="sync-pill" data-sync-pill></a>
-        <a href="#/mon-profil" class="user-name user-link" aria-label="Mon profil">${icon("userCheck", { size: 18 })}<span class="header-label">${state.user ? escapeHtml(state.user.full_name) : ""}</span></a>
-        ${isAdmin() ? `<a href="#/parametres" class="btn btn-ghost btn-sm" aria-label="Paramètres">${icon("wrench", { size: 18 })}<span class="header-label">Paramètres</span></a>` : ""}
-        <button class="btn btn-ghost btn-sm" id="logout-btn" aria-label="Déconnexion">${icon("logout", { size: 18 })}<span class="header-label">Déconnexion</span></button>
+        <button type="button" class="header-search" id="search-global" aria-label="Rechercher (touche /)">
+          ${icon("search", { size: 18 })}<span class="header-label">Rechercher</span><kbd class="header-label">/</kbd>
+        </button>
+        <button type="button" class="header-icon" id="scan-global" aria-label="Scanner un outil" title="Scanner un outil">${icon("camera", { size: 20 })}</button>
+        <a href="#/notifications" class="header-icon nav-link" data-path="/notifications" aria-label="Alertes" title="Alertes">
+          ${icon("bell", { size: 20 })}<span class="bell-badge hidden" data-bell-badge></span>
+        </a>
+        <div class="menu-anchor">
+          <button type="button" class="header-account" data-menu-toggle="menu-account" aria-haspopup="true" aria-expanded="false" aria-controls="menu-account" aria-label="Mon compte">
+            <span class="header-avatar" aria-hidden="true">${initials(fullName)}</span>
+            <span class="header-label header-account-name">${escapeHtml(fullName)}</span>
+            <span class="header-label">${icon("chevronDown", { size: 16 })}</span>
+          </button>
+          <div id="menu-account" class="menu-panel menu-panel-account hidden">
+            <p class="menu-account-name">${escapeHtml(fullName)}</p>
+            <a href="#/mon-profil" class="menu-item nav-link" data-path="/mon-profil">${icon("userCheck", { size: 20 })}<span>Mon profil</span></a>
+            ${isAdmin() ? `<a href="#/parametres" class="menu-item nav-link" data-path="/parametres">${icon("wrench", { size: 20 })}<span>Paramètres</span></a>` : ""}
+            <button type="button" class="menu-item menu-item-logout" id="logout-btn">${icon("logout", { size: 20 })}<span>Déconnexion</span></button>
+          </div>
+        </div>
       </div>
     </div>
   `;
 
-  mobileNav.innerHTML = navLinks();
+  mobileNav.innerHTML = phoneNav(current);
   wireImageFallbacks(header);
 
   document.getElementById("search-global").addEventListener("click", openGlobalSearch);
@@ -179,12 +282,13 @@ function buildChrome() {
     });
   }
 
-  const currentHash = location.hash.slice(1) || "/";
-  document.querySelectorAll(".nav-link").forEach((link) => {
-    if (link.dataset.path === currentHash) {
+  document.querySelectorAll(".nav-link[data-path]").forEach((link) => {
+    if (isCurrent(link.dataset.path, current)) {
       link.classList.add("active");
+      link.setAttribute("aria-current", "page");
     }
   });
+  if (isLoggedIn()) refreshNotificationCount();
 }
 
 let pendingActions = 0;
@@ -208,6 +312,7 @@ window.addEventListener("offline", refreshSyncPill);
 initTheme();
 startAccessibleForms();
 initGlobalSearchShortcut();
+wireMenus();
 
 window.addEventListener("hashchange", buildChrome);
 buildChrome();

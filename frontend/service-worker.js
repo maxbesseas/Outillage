@@ -1,4 +1,4 @@
-const CACHE_NAME = "outillage-shell-v40";
+const CACHE_NAME = "outillage-shell-v42";
 
 const APP_SHELL = [
   "/",
