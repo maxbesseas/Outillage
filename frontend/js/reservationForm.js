@@ -25,7 +25,7 @@ export async function openReserveForm(tool, onDone, prefillStart) {
   openModal(
     `
     <div class="modal-header">
-      <div class="card-title">Réserver — ${escapeHtml(tool.name)}</div>
+      <div class="card-title">Réserver — ${escapeHtml(tool.name)}${tool.unique_code ? ` (${escapeHtml(tool.unique_code)})` : ""}</div>
       <button class="btn btn-ghost btn-sm" id="reserve-close">Fermer</button>
     </div>
     <form id="reserve-form" class="form-grid">

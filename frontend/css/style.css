@@ -2066,3 +2066,74 @@ table.simple-table th {
 .mobile-nav:has(.menu-panel:not(.hidden)) {
   z-index: 900;
 }
+
+/* Calendrier : une ligne par sorte d'outil */
+.cal-side-type {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.cal-side-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.5rem 0.65rem;
+  margin-bottom: 0.4rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.cal-side-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.cal-side-count {
+  font-size: 0.8rem;
+  font-weight: 400;
+  color: var(--text-dim);
+}
+
+.cal-side-item-full .cal-side-count {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* Le texte des réservations ne doit jamais élargir les colonnes du calendrier. */
+.app-main:has(.cal-layout) {
+  max-width: 1320px;
+}
+
+.cal-layout > * {
+  min-width: 0;
+}
+
+.cal-layout {
+  grid-template-columns: minmax(0, 1fr) 280px;
+}
+
+.cal-grid {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.cal-grid.cal-day,
+.cal-grid.cal-single {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cal-cell {
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .cal-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

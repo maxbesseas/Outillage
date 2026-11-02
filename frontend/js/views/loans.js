@@ -221,19 +221,36 @@ async function renderCalendarBody(container, tools, users) {
     .join("");
 
   const availableTools = scopedTools.filter((t) => t.status === "disponible");
-  document.getElementById("cal-side-list").innerHTML = availableTools.length
-    ? availableTools
+  const toolGroups = groupToolsByName(scopedTools, activeLoans);
+  const groupsByType = new Map();
+  toolGroups.forEach((group) => {
+    if (!groupsByType.has(group.type)) groupsByType.set(group.type, []);
+    groupsByType.get(group.type).push(group);
+  });
+  document.getElementById("cal-side-list").innerHTML = toolGroups.length
+    ? [...groupsByType]
         .map(
-          (t) => `
-      <div class="card" style="padding:0.6rem 0.7rem;">
-        <div class="card-row">
-          <div class="card-sub">${escapeHtml(t.name)}</div>
-          <button class="btn btn-sm" data-reserve-id="${t.id}">${icon("plus", { size: 14 })}</button>
-        </div>
-      </div>`
+          ([type, groups]) => `
+      <h4 class="cal-side-type">${escapeHtml(type)}</h4>
+      ${groups
+        .map(
+          (group) => `
+        <div class="cal-side-item${group.pick ? "" : " cal-side-item-full"}">
+          <div class="cal-side-name">
+            <span>${escapeHtml(group.name)}</span>
+            <span class="cal-side-count">${group.pick ? `${group.available} disponible${group.available > 1 ? "s" : ""} sur ${group.total}` : `Aucun disponible sur ${group.total}`}</span>
+          </div>
+          ${
+            group.pick
+              ? `<button class="btn btn-sm" data-reserve-id="${group.pick.id}" aria-label="Réserver : ${escapeHtml(group.name)}">${icon("plus", { size: 14 })}</button>`
+              : ""
+          }
+        </div>`
+        )
+        .join("")}`
         )
         .join("")
-    : `<div class="empty-state">Aucun outil disponible.</div>`;
+    : `<div class="empty-state">Aucun outil pour ce filtre.</div>`;
 
   document.querySelectorAll("[data-reserve-id]").forEach((btn) => {
     btn.addEventListener("click", () => {
@@ -343,7 +360,7 @@ async function renderCalendarBody(container, tools, users) {
       if (scopedTools.length === 1) {
         openReserveForm(scopedTools[0], () => renderCalendarBody(container, tools, users), day);
       } else if (availableTools.length) {
-        openToolPicker(availableTools, (tool) => openReserveForm(tool, () => renderCalendarBody(container, tools, users), day));
+        openToolPicker(toolGroups.filter((group) => group.pick), (tool) => openReserveForm(tool, () => renderCalendarBody(container, tools, users), day));
       } else {
         toast("Aucun outil disponible pour ce filtre", "error");
       }
@@ -376,15 +393,38 @@ async function renderCalendarBody(container, tools, users) {
   });
 }
 
-function openToolPicker(availableTools, onPick) {
+/** Une ligne par sorte d'outil. Le + réserve une unité présente à l'entrepôt, sans réservation en cours si possible, et en meilleur état. */
+function groupToolsByName(scopedTools, activeLoans) {
+  const booked = new Set(activeLoans.map((loan) => loan.tool_id));
+  const groups = new Map();
+  scopedTools
+    .filter((tool) => !["sorti_du_parc", "dotation"].includes(tool.status))
+    .forEach((tool) => {
+      if (!groups.has(tool.name)) groups.set(tool.name, { name: tool.name, type: tool.type || "Autres", total: 0, available: 0, units: [] });
+      const group = groups.get(tool.name);
+      group.total += 1;
+      if (tool.status === "disponible") {
+        group.available += 1;
+        group.units.push(tool);
+      }
+    });
+  return [...groups.values()]
+    .map((group) => ({
+      ...group,
+      pick: [...group.units].sort((a, b) => booked.has(a.id) - booked.has(b.id) || b.state - a.state || String(a.unique_code).localeCompare(String(b.unique_code)))[0] || null,
+    }))
+    .sort((a, b) => a.type.localeCompare(b.type, "fr") || a.name.localeCompare(b.name, "fr"));
+}
+
+function openToolPicker(groups, onPick) {
   const html = `
     <div class="modal-header">
       <div class="card-title">Choisir un outil</div>
       <button class="btn btn-ghost btn-sm" id="form-close">Fermer</button>
     </div>
     <div class="form-grid">
-      ${availableTools
-        .map((t) => `<button class="btn btn-block" data-pick="${t.id}">${escapeHtml(t.name)}</button>`)
+      ${groups
+        .map((group) => `<button class="btn btn-block" data-pick="${group.pick.id}">${escapeHtml(group.name)} (${group.available} disponible${group.available > 1 ? "s" : ""})</button>`)
         .join("")}
     </div>
   `;
@@ -393,9 +433,9 @@ function openToolPicker(availableTools, onPick) {
       root.querySelector("#form-close").addEventListener("click", closeModal);
       root.querySelectorAll("[data-pick]").forEach((btn) => {
         btn.addEventListener("click", () => {
-          const tool = availableTools.find((t) => t.id === Number(btn.dataset.pick));
+          const group = groups.find((item) => item.pick.id === Number(btn.dataset.pick));
           closeModal();
-          onPick(tool);
+          onPick(group.pick);
         });
       });
     },
