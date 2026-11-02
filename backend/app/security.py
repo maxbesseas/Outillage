@@ -1,5 +1,6 @@
 from datetime import timedelta
 from typing import Optional
+from urllib.parse import urlsplit
 
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
@@ -9,7 +10,11 @@ from . import config, utils
 from .models import LoginAttempt
 
 # Stockage S3 : /uploads redirige vers une URL signée, à autoriser pour les images et le service worker.
-_FILES_ORIGIN = f" {config.S3_ENDPOINT}" if config.S3_BUCKET and config.S3_ENDPOINT else ""
+# Origine seule : l'adresse S3 de Supabase contient un chemin, qui restreindrait la règle CSP à ce chemin.
+_FILES_ORIGIN = ""
+if config.S3_BUCKET and config.S3_ENDPOINT:
+    _files_url = urlsplit(config.S3_ENDPOINT)
+    _FILES_ORIGIN = f" {_files_url.scheme}://{_files_url.netloc}"
 
 CSP = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "

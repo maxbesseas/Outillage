@@ -44,6 +44,11 @@ try:
 finally:
     _cfg12.IS_PROD, _cfg12.ADMIN_PASSWORD, _cfg12.DATABASE_URL, _cfg12.TRUST_PROXY_HEADERS = _saved12
 
+from app import database as _db12
+
+check("a transaction pooler gets no client pool and no prepared statements", _db12.engine_options("postgresql+psycopg://u:p@h:6543/db?sslmode=require") == {"poolclass": _db12.NullPool, "connect_args": {"prepare_threshold": None}})
+check("a session connection keeps its small pool", _db12.engine_options("postgresql+psycopg://u:p@h:5432/db?sslmode=require")["pool_size"] == 2)
+
 import io as _io12
 
 from fastapi import HTTPException as _HE12, UploadFile as _UF12
