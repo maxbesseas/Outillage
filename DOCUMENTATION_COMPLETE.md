@@ -623,6 +623,13 @@ Mis à jour à la fin de la phase 11 (état honnête, y compris les limites qui 
 | `OUTILLAGE_ENV` | `dev` ou `prod` | `prod` |
 | `OUTILLAGE_SECRET_KEY` | clé de signature des jetons (obligatoire en `prod`) | valeur de développement |
 | `OUTILLAGE_DB_PATH` | fichier SQLite | `backend/outillage.db` |
+| `OUTILLAGE_DATABASE_URL` | PostgreSQL ; `sslmode=require` ou `verify-full` obligatoire en production (voir `DEPLOIEMENT.md`) | vide : SQLite |
+| `OUTILLAGE_ADMIN_PASSWORD` | mot de passe du premier admin ; sans lui, aucun compte n'est créé en production | vide |
+| `OUTILLAGE_AUTO_MIGRATE` | `off` : schéma préparé par `python -m app.db_setup` | `on` |
+| `OUTILLAGE_S3_BUCKET`, `_ENDPOINT`, `_REGION`, `_ACCESS_KEY`, `_SECRET_KEY` | stockage des fichiers compatible S3 | vide : dossier local |
+| `OUTILLAGE_TRUST_PROXY` | `on` : IP lue dans `X-Forwarded-For`, derrière un proxy qui réécrit cet en-tête | `off` |
+| `OUTILLAGE_EXCEL_SYNC` | `off` : pas de synchronisation vers les classeurs | `on` |
+| `OUTILLAGE_MAX_UPLOAD_MB` | taille maximale d'un document | `10` |
 | `OUTILLAGE_BACKUP_DIR` | sauvegardes avant migration | `backend/backups` |
 | `OUTILLAGE_CORS_ORIGINS` | origines autorisées (séparées par des virgules) | vide (même origine) |
 | `OUTILLAGE_PUBLIC_URL` | base des liens envoyés par email | `http://127.0.0.1:8000` |

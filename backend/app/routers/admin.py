@@ -142,6 +142,15 @@ def run_scheduled_job(
     return jobs.run_job(name, f"manuel:{current_user.username}")
 
 
+@cron_router.get("/tick")
+def cron_tick(authorization: Optional[str] = Header(default=None)):
+    """Lance les tâches arrivées à échéance. Sans thread permanent (serverless), appelé par le cron de l'hébergeur."""
+    expected = config.CRON_TOKEN
+    if not expected or not authorization or not hmac.compare_digest(authorization.encode(), f"Bearer {expected}".encode()):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Clé de déclenchement invalide")
+    return {"results": jobs.run_due("cron")}
+
+
 @cron_router.post("/{name}")
 def run_job_from_cron(name: str, request: Request, x_cron_token: Optional[str] = Header(default=None)):
     expected = config.CRON_TOKEN

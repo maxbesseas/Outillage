@@ -3,28 +3,32 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.engine import Connection, Engine
 
 from . import config, utils
 
 
 def _columns(conn: Connection, table: str) -> set:
-    return {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})"))}
+    return {column["name"] for column in inspect(conn).get_columns(table)}
 
 
 def _table_exists(conn: Connection, table: str) -> bool:
-    row = conn.execute(
-        text("SELECT name FROM sqlite_master WHERE type='table' AND name=:n"), {"n": table}
-    ).fetchone()
-    return row is not None
+    return inspect(conn).has_table(table)
+
+
+def _ddl(conn: Connection, ddl: str) -> str:
+    """Les migrations sont écrites pour SQLite : équivalents PostgreSQL des types et valeurs par défaut."""
+    if conn.dialect.name == "postgresql":
+        return ddl.replace("DATETIME", "TIMESTAMP").replace("BOOLEAN NOT NULL DEFAULT 0", "BOOLEAN NOT NULL DEFAULT FALSE")
+    return ddl
 
 
 def add_column_if_missing(conn: Connection, table: str, column: str, ddl: str):
     if not _table_exists(conn, table):
         return
     if column not in _columns(conn, table):
-        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {_ddl(conn, ddl)}"))
 
 
 def create_index_if_missing(conn: Connection, name: str, table: str, columns: str):
@@ -62,8 +66,8 @@ def m003_seed_agencies(conn: Connection):
     existing = {row[0] for row in conn.execute(text("SELECT name FROM agencies"))}
     for name in sorted(names - existing):
         conn.execute(
-            text("INSERT INTO agencies (name, is_active, created_at) VALUES (:n, 1, :d)"),
-            {"n": name, "d": utils.now()},
+            text("INSERT INTO agencies (name, is_active, created_at) VALUES (:n, :active, :d)"),
+            {"n": name, "active": True, "d": utils.now()},
         )
 
 
@@ -75,7 +79,7 @@ def m004_flag_default_admin_password(conn: Connection):
         {"u": config.DEFAULT_ADMIN_USERNAME},
     ).fetchone()
     if row and verify_password(config.DEFAULT_ADMIN_PASSWORD, row[1]):
-        conn.execute(text("UPDATE users SET must_change_password = 1 WHERE id = :i"), {"i": row[0]})
+        conn.execute(text("UPDATE users SET must_change_password = :flag WHERE id = :i"), {"flag": True, "i": row[0]})
 
 
 def m005_loans_phase4(conn: Connection):
@@ -158,10 +162,10 @@ MIGRATIONS: List[Tuple[int, str, Callable[[Connection], None]]] = [
 
 def _ensure_table(conn: Connection):
     conn.execute(
-        text(
+        text(_ddl(conn,
             "CREATE TABLE IF NOT EXISTS schema_migrations ("
             "version INTEGER PRIMARY KEY, description VARCHAR, applied_at DATETIME)"
-        )
+        ))
     )
 
 
@@ -177,6 +181,8 @@ def current_version(engine: Engine) -> int:
 
 
 def backup_database(engine: Engine, backup_dir: Path, label: str) -> Optional[Path]:
+    if engine.dialect.name != "sqlite":
+        return None  # PostgreSQL : sauvegardes assurées par l'hébergeur de la base
     db_file = engine.url.database
     if not db_file or db_file == ":memory:" or not Path(db_file).exists():
         return None

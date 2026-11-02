@@ -180,6 +180,17 @@ def _due(name: str, job: Job) -> bool:
         db.close()
 
 
+def run_due(trigger: str) -> list:
+    results = []
+    for name, job in JOBS.items():
+        try:
+            if _due(name, job):
+                results.append(run_job(name, trigger))
+        except Exception:
+            pass
+    return results
+
+
 class Scheduler:
     def __init__(self):
         self._stop = threading.Event()
@@ -187,12 +198,7 @@ class Scheduler:
 
     def _loop(self):
         while not self._stop.wait(TICK_SECONDS):
-            for name, job in JOBS.items():
-                try:
-                    if _due(name, job):
-                        run_job(name, "scheduler")
-                except Exception:
-                    pass
+            run_due("scheduler")
 
     def start(self):
         if self._thread and self._thread.is_alive():

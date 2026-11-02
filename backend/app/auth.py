@@ -99,7 +99,7 @@ def invalidate_sessions(db: Session, user: User):
 def client_ip(request: Optional[Request]) -> Optional[str]:
     if request is None or request.client is None:
         return None
-    return request.client.host
+    return utils.client_ip(request)
 
 
 def _decode_user(token: str, db: Session) -> User:

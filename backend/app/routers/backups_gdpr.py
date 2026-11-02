@@ -39,6 +39,8 @@ def list_backups(current_user: User = Depends(get_current_admin)):
 
 @backups_router.post("", status_code=status.HTTP_201_CREATED)
 def create_backup(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    if not backups.supported():
+        _fail("Les sauvegardes sont assurées par l'hébergeur de la base", status.HTTP_409_CONFLICT)
     path = backups.create_backup("manuel")
     audit.record(db, "backup_created", current_user.id, "backup", path.name, request, {"size": path.stat().st_size})
     db.commit()

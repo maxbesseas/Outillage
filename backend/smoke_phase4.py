@@ -335,7 +335,10 @@ r = client.post(f"/users/{dep1_id}/depart", json={"to_user_id": dep2_id}, header
 check("the departure reassigns tools, EPI, dotations and ownership", r.status_code == 200 and r.json()["counts"]["epi"] == 1 and r.json()["counts"]["personal_tools"] >= 1 and r.json()["counts"]["ownership"] >= 1)
 check("the leaving account is deactivated and its sessions closed", client.get("/auth/me", headers=auth(dep1)).status_code == 401)
 check("the receiver now owns the tool", any(t["unique_code"] == "P4-DEP-TOOL" for t in client.get("/personal-tools", headers=auth(login("dep2"))).json()))
-check("the emptied account can finally be deleted", client.delete(f"/users/{dep1_id}", headers=admin_headers).status_code == 204)
+r = client.delete(f"/users/{dep1_id}", headers=admin_headers)
+check("an account with a loan history cannot be deleted, to keep the traceability", r.status_code == 400 and "anonymisez" in r.json()["detail"])
+r = client.post(f"/gdpr/anonymize/{dep1_id}", headers=admin_headers)
+check("the emptied account can be anonymized instead", r.status_code == 200 and r.json()["username"] == f"anonyme-{dep1_id}")
 
 cA_id = make_user("depcharge_a", dir101_token, role="charge_affaires")
 cB_id = make_user("depcharge_b", dir101_token, role="charge_affaires")

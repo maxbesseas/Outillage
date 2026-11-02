@@ -28,7 +28,7 @@ def record(
     request: Optional[Request] = None,
     details: Optional[dict] = None,
 ):
-    ip = request.client.host if request is not None and request.client else None
+    ip = utils.client_ip(request)
     user_agent = request.headers.get("user-agent", "")[:200] if request is not None else None
     entry = AuditLog(
         user_id=user_id,

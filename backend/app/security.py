@@ -8,9 +8,12 @@ from starlette.requests import Request
 from . import config, utils
 from .models import LoginAttempt
 
+# Stockage S3 : /uploads redirige vers une URL signée, à autoriser pour les images et le service worker.
+_FILES_ORIGIN = f" {config.S3_ENDPOINT}" if config.S3_BUCKET and config.S3_ENDPOINT else ""
+
 CSP = (
     "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
-    "img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self'; font-src 'self'; "
+    f"img-src 'self' data: blob:{_FILES_ORIGIN}; media-src 'self' blob:; connect-src 'self'{_FILES_ORIGIN}; font-src 'self'; "
     "object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
 )
 

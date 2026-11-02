@@ -1,0 +1,50 @@
+# ---------- Mise en ligne : cron sans thread, compte admin initial, base chiffrée, IP derrière proxy ----------
+from types import SimpleNamespace as _NS12
+
+from app import config as _cfg12, utils as _ut12
+
+check("the cron tick refuses a missing or wrong token", client.get("/cron/tick").status_code == 403 and client.get("/cron/tick", headers={"Authorization": "Bearer nope"}).status_code == 403)
+r = client.get("/cron/tick", headers={"Authorization": "Bearer cron-test-token"})
+check("the cron tick runs the jobs that are due", r.status_code == 200 and isinstance(r.json()["results"], list))
+
+_saved12 = (_cfg12.IS_PROD, _cfg12.ADMIN_PASSWORD, _cfg12.DATABASE_URL, _cfg12.TRUST_PROXY_HEADERS)
+
+
+def _raises12(**kwargs):
+    try:
+        _cfg12.validate_startup(is_prod=True, secret_key="une-cle-de-test", **kwargs)
+    except RuntimeError:
+        return True
+    return False
+
+
+try:
+    _cfg12.IS_PROD, _cfg12.ADMIN_PASSWORD = True, None
+    check("production creates no admin without a provided password", _cfg12.initial_admin_password() is None)
+    _cfg12.ADMIN_PASSWORD = "un-mot-de-passe-fourni"
+    check("production uses the provided admin password", _cfg12.initial_admin_password() == "un-mot-de-passe-fourni")
+    _cfg12.ADMIN_PASSWORD = _cfg12.DEFAULT_ADMIN_PASSWORD
+    check("production refuses the development admin password", _raises12())
+    _cfg12.ADMIN_PASSWORD = None
+    _cfg12.IS_PROD = False
+    check("development keeps its default admin password", _cfg12.initial_admin_password() == _cfg12.DEFAULT_ADMIN_PASSWORD)
+
+    _cfg12.DATABASE_URL = "postgresql+psycopg://u:p@h/db"
+    check("production refuses an unencrypted PostgreSQL connection", _raises12())
+    _cfg12.DATABASE_URL = "postgresql+psycopg://u:p@h/db?sslmode=disable"
+    check("production refuses sslmode=disable", _raises12())
+    _cfg12.DATABASE_URL = "postgresql+psycopg://u:p@h/db?sslmode=require"
+    check("production accepts an encrypted PostgreSQL connection", not _raises12())
+
+    _req12 = _NS12(headers={"x-forwarded-for": "203.0.113.9, 10.0.0.1"}, client=_NS12(host="10.0.0.1"))
+    _cfg12.TRUST_PROXY_HEADERS = False
+    check("the forwarded IP is ignored by default (it could be forged)", _ut12.client_ip(_req12) == "10.0.0.1")
+    _cfg12.TRUST_PROXY_HEADERS = True
+    check("behind a trusted proxy the forwarded IP is used", _ut12.client_ip(_req12) == "203.0.113.9")
+finally:
+    _cfg12.IS_PROD, _cfg12.ADMIN_PASSWORD, _cfg12.DATABASE_URL, _cfg12.TRUST_PROXY_HEADERS = _saved12
+
+_mgr12 = next(u["id"] for u in client.get("/users", headers=auth(admin_token)).json() if u["username"] == "charge101")
+_uid12 = make_user("del12", admin_token, "gars_chantier", manager_id=_mgr12)
+login("del12")
+check("a session token does not prevent deleting an account", client.delete(f"/users/{_uid12}", headers=auth(admin_token)).status_code == 204)

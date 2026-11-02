@@ -1,0 +1,17 @@
+.env
+.env.*
+*.db
+*.sqlite
+*.sqlite3
+*.xlsx
+*.xls
+*.zip
+Source/
+tools/
+backend/venv/
+backend/backups/
+backend/uploads/
+backend/smoke_*.py
+backend/migrate_to_postgres.py
+DOCUMENTATION_COMPLETE.md
+RESUME_PROJET.md

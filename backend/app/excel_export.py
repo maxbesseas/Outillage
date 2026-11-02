@@ -6,7 +6,7 @@ from typing import Iterable, Optional, Tuple
 
 from openpyxl import Workbook, load_workbook
 
-from .config import EXCEL_SOURCE_DIR
+from .config import EXCEL_SOURCE_DIR, EXCEL_SYNC_ENABLED
 from .models import AgencyTool, AgencyToolStatus
 
 COLUMNS = [
@@ -201,7 +201,7 @@ def enqueue_sync(db, tool: AgencyTool, action: str, registry_name: Optional[str]
     from . import appsettings, utils
     from .models_p8 import ExcelSyncTask
 
-    if action != "append" and appsettings.get(db, "excel.sync_mode") != "full":
+    if not EXCEL_SYNC_ENABLED or (action != "append" and appsettings.get(db, "excel.sync_mode") != "full"):
         return True, "ok"
     if action == "append":
         ok, message = sync_new_agency_tool(tool, registry_name)

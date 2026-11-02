@@ -95,6 +95,8 @@ Toute modification de l'état (0-5), du statut ou du motif d'un outil personnel,
 
 **Sécurité** : mots de passe hachés bcrypt, JWT avec rotation des jetons de rafraîchissement, contrôles de rôle ET de périmètre d'agence côté serveur sur chaque route, échappement HTML systématique côté client, secrets jamais renvoyés par l'API ni journalisés, clés d'API en lecture seule pour l'intégration externe, RGPD (export et anonymisation).
 
+**Mise en ligne** : Vercel (Paris) avec PostgreSQL et stockage S3 privé chez Scaleway ; le mode local reste en SQLite. Procédure et différences : `DEPLOIEMENT.md`. En production, l'assistant IA reste désactivé tant qu'aucune clé API n'est fournie.
+
 ## 9. Assistant IA (chatbot)
 
 Bulle flottante disponible sur toutes les pages une fois connecté, adaptée au rôle de la personne connectée. Deux modes : si une clé API Anthropic est configurée côté serveur (`ANTHROPIC_API_KEY`), les réponses sont générées par Claude (modèle configurable via `OUTILLAGE_ASSISTANT_MODEL`) ; sinon un mode local hors ligne renvoie les passages les plus pertinents de ce document.

@@ -2,6 +2,13 @@
 
 Ce journal suit les évolutions notables de l'application. Format libre, en français, un point par changement significatif. La version applicative vit dans `backend/app/config.py` (`VERSION`).
 
+## À venir — mise en ligne
+
+- Prise en charge de PostgreSQL (`OUTILLAGE_DATABASE_URL`, connexion chiffrée obligatoire en production) et d'un stockage de fichiers S3 privé, en plus du mode local SQLite. Procédure : `DEPLOIEMENT.md`.
+- En production, le premier compte admin n'est créé qu'avec `OUTILLAGE_ADMIN_PASSWORD` : `admin123` ne sert plus qu'en développement.
+- Déploiement Vercel : entrée `api/index.py`, cron `/cron/tick`, IP lue derrière le proxy, script `migrate_to_postgres.py`.
+- La suppression d'un compte retire ses données propres et vide les références facultatives. Elle est refusée s'il reste un historique à conserver (prêts, transferts...) : anonymiser le compte à la place.
+
 ## 1.0.0 — reconstruction complète et feuille de route phases 0-11
 
 Reconstruction intégrale de l'application (FastAPI + SQLAlchemy 2 + SQLite, frontend JS vanilla en modules ES, PWA), puis exécution de la feuille de route d'évolution :

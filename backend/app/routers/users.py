@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from .. import audit, schemas
@@ -13,7 +14,7 @@ from ..auth import (
     invalidate_sessions,
     validate_password_strength,
 )
-from ..database import get_db
+from ..database import Base, get_db
 from ..hierarchy import CHILD_ROLE, PARENT_ROLE, ROLE_LABELS, visible_user_ids
 from ..models import (
     AgencyTool,
@@ -31,6 +32,36 @@ from ..models import (
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+# Données propres au compte, supprimées avec lui ; le reste de l'historique métier reste rattaché et bloque la suppression.
+ACCOUNT_TABLES = {
+    "refresh_tokens", "password_reset_tokens", "notifications", "notification_preferences", "push_subscriptions",
+    "assistant_actions", "assistant_messages", "assistant_usage", "user_qualifications",
+}
+
+
+def _user_references():
+    for table in Base.metadata.sorted_tables:
+        for fk in table.foreign_keys:
+            if fk.column.table.name == "users":
+                yield table, fk.parent
+
+
+def _history_tables(db: Session, user_id: int) -> list:
+    return sorted({
+        table.name for table, column in _user_references()
+        if not column.nullable and table.name not in ACCOUNT_TABLES
+        and db.execute(select(func.count()).select_from(table).where(column == user_id)).scalar()
+    })
+
+
+def _release_references(db: Session, user_id: int):
+    for table, column in _user_references():
+        if table.name in ACCOUNT_TABLES and not column.nullable:
+            db.execute(table.delete().where(column == user_id))
+        elif column.nullable:
+            db.execute(table.update().where(column == user_id).values({column.name: None}))
 
 
 def _holdings(db: Session, user_id: int) -> dict:
@@ -326,7 +357,16 @@ def delete_user(
             "Réaffectez son matériel puis désactivez le compte.",
         )
 
+    history = _history_tables(db, user.id)
+    if history:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Suppression impossible : ce compte a un historique à conserver (" + ", ".join(history) + "). "
+            "Désactivez-le ou anonymisez-le.",
+        )
+
     audit.record(db, "user_deleted", current_user.id, "user", user.id, request, {"username": user.username})
+    _release_references(db, user.id)
     db.delete(user)
     db.commit()
     return None

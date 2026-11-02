@@ -2,14 +2,16 @@ import json
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response, status
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from starlette.types import Scope
 
-from . import alerts_p5, config, database, migrations, models_ext, models_p2, models_p3, models_p4, models_p5, models_p6, models_p7, models_p8, models_p9  # noqa: F401
+from . import alerts_p5, config, database, migrations, storage, models_ext, models_p2, models_p3, models_p4, models_p5, models_p6, models_p7, models_p8, models_p9  # noqa: F401
 from .auth import hash_password
-from .config import DEFAULT_ADMIN_PASSWORD, DEFAULT_ADMIN_USERNAME, FRONTEND_DIR, UPLOAD_DIR
+from .config import DEFAULT_ADMIN_USERNAME, FRONTEND_DIR, UPLOAD_DIR
 from .idempotency import idempotency_middleware
 from .jobs import scheduler
 from .models import User, UserRole
@@ -47,17 +49,17 @@ from .tzmiddleware import NaiveUtcMiddleware
 
 config.validate_startup()
 
-database.Base.metadata.create_all(bind=database.engine)
-migrations.run_migrations(database.engine)
-
 
 def create_default_admin():
+    password = config.initial_admin_password()
+    if password is None:
+        return
     db = database.SessionLocal()
     try:
         if not db.query(User).filter(User.username == DEFAULT_ADMIN_USERNAME).first():
             admin_user = User(
                 username=DEFAULT_ADMIN_USERNAME,
-                hashed_password=hash_password(DEFAULT_ADMIN_PASSWORD),
+                hashed_password=hash_password(password),
                 full_name="Administrateur",
                 role=UserRole.admin,
                 must_change_password=True,
@@ -68,7 +70,10 @@ def create_default_admin():
         db.close()
 
 
-create_default_admin()
+if config.AUTO_MIGRATE:
+    database.Base.metadata.create_all(bind=database.engine)
+    migrations.run_migrations(database.engine)
+    create_default_admin()
 
 
 @asynccontextmanager
@@ -99,6 +104,11 @@ app.add_middleware(
 )
 
 
+@app.exception_handler(IntegrityError)
+async def integrity_error(request: Request, exc: IntegrityError):
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": "Opération impossible : des données y sont encore liées."})
+
+
 app.middleware("http")(idempotency_middleware)
 
 
@@ -110,7 +120,12 @@ async def security_headers(request: Request, call_next):
 
 app.add_middleware(NaiveUtcMiddleware)
 
-app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+if storage.enabled():
+    @app.get("/uploads/{path:path}", include_in_schema=False)
+    def uploaded_file(path: str):
+        return RedirectResponse(storage.presigned_url(path), status_code=status.HTTP_307_TEMPORARY_REDIRECT, headers={"Cache-Control": "no-store"})
+else:
+    app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 app.include_router(auth.router)
 app.include_router(users.router)

@@ -6,7 +6,7 @@ from typing import Set
 from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
-from . import config
+from . import config, storage
 from .database import Base, engine
 
 # Sécurité : un fichier tout juste déposé peut ne pas encore être commité en base (upload en cours).
@@ -33,7 +33,21 @@ def referenced_paths(db: Session) -> Set[str]:
     return referenced
 
 
+def _cleanup_remote(db: Session) -> str:
+    referenced = referenced_paths(db)
+    now = time.time()
+    removed, checked = 0, 0
+    for rel, modified in storage.list_files():
+        checked += 1
+        if rel not in referenced and now - modified >= MIN_AGE_SECONDS:
+            storage.delete(rel)
+            removed += 1
+    return f"{removed} fichier(s) orphelin(s) supprimé(s) sur {checked} vérifié(s)"
+
+
 def cleanup_orphan_uploads(db: Session) -> str:
+    if storage.enabled():
+        return _cleanup_remote(db)
     if not config.UPLOAD_DIR.exists():
         return "Dossier uploads absent"
     referenced = referenced_paths(db)

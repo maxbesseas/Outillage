@@ -369,6 +369,7 @@ exec(compile(Path(__file__).with_name("smoke_phase8.py").read_text(encoding="utf
 exec(compile(Path(__file__).with_name("smoke_phase9.py").read_text(encoding="utf-8"), "smoke_phase9.py", "exec"), globals())
 
 exec(compile(Path(__file__).with_name("smoke_phase11.py").read_text(encoding="utf-8"), "smoke_phase11.py", "exec"), globals())
+exec(compile(Path(__file__).with_name("smoke_phase12.py").read_text(encoding="utf-8"), "smoke_phase12.py", "exec"), globals())
 
 
 

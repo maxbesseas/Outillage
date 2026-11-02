@@ -5,6 +5,7 @@ from typing import Callable, Optional
 
 from fastapi import UploadFile
 
+from . import config, storage
 from .config import UPLOAD_DIR
 
 ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
@@ -22,7 +23,27 @@ def set_clock(fn: Optional[Callable[[], datetime]]):
 
 
 DOCUMENT_EXTENSIONS = {".pdf", ".jpg", ".jpeg", ".png", ".webp"}
-MAX_DOCUMENT_BYTES = 10 * 1024 * 1024
+MAX_DOCUMENT_BYTES = config.MAX_UPLOAD_MB * 1024 * 1024
+
+
+def client_ip(request) -> Optional[str]:
+    if request is None:
+        return None
+    if config.TRUST_PROXY_HEADERS:
+        forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        if forwarded:
+            return forwarded
+    return request.client.host if request.client else None
+
+
+def _store(subfolder: str, filename: str, content: bytes) -> str:
+    if storage.enabled():
+        storage.put(f"{subfolder}/{filename}", content)
+    else:
+        folder = UPLOAD_DIR / subfolder
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / filename).write_bytes(content)
+    return f"/uploads/{subfolder}/{filename}"
 
 
 def save_document(file: UploadFile, subfolder: str, allowed=DOCUMENT_EXTENSIONS, max_bytes: int = MAX_DOCUMENT_BYTES) -> str:
@@ -38,11 +59,7 @@ def save_document(file: UploadFile, subfolder: str, allowed=DOCUMENT_EXTENSIONS,
     if ext == ".pdf" and not content.startswith(b"%PDF"):
         raise HTTPException(status_code=400, detail="Le fichier n'est pas un PDF valide")
 
-    folder = UPLOAD_DIR / subfolder
-    folder.mkdir(parents=True, exist_ok=True)
-    filename = f"{uuid.uuid4().hex}{ext}"
-    (folder / filename).write_bytes(content)
-    return f"/uploads/{subfolder}/{filename}"
+    return _store(subfolder, f"{uuid.uuid4().hex}{ext}", content)
 
 
 def save_upload_file(file: UploadFile, subfolder: str) -> str:
@@ -50,12 +67,4 @@ def save_upload_file(file: UploadFile, subfolder: str) -> str:
     if ext not in ALLOWED_EXTENSIONS:
         ext = ".jpg"
 
-    filename = f"{uuid.uuid4().hex}{ext}"
-    folder = UPLOAD_DIR / subfolder
-    folder.mkdir(parents=True, exist_ok=True)
-    destination = folder / filename
-
-    with destination.open("wb") as buffer:
-        buffer.write(file.file.read())
-
-    return f"/uploads/{subfolder}/{filename}"
+    return _store(subfolder, f"{uuid.uuid4().hex}{ext}", file.file.read())

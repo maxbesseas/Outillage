@@ -22,6 +22,11 @@ def _dir() -> Path:
     return config.BACKUP_DIR
 
 
+def supported() -> bool:
+    """PostgreSQL : pas d'archive applicative, les sauvegardes sont assurées par l'hébergeur de la base."""
+    return engine.dialect.name == "sqlite"
+
+
 def create_backup(label: str = "auto") -> Path:
     """Crée une archive zip : outillage.db (copie cohérente via l'API de sauvegarde SQLite), uploads/, manifest.json."""
     safe_label = re.sub(r"[^a-z0-9-]+", "-", label.lower()).strip("-")[:30] or "manuel"
@@ -116,6 +121,8 @@ def verify(path: Path) -> dict:
 
 def daily_backup(db: Session) -> str:
     """Tâche planifiée : une sauvegarde par jour, à partir de l'heure réglée (UTC), puis rotation."""
+    if not supported():
+        return "Sauvegardes assurées par l'hébergeur de la base"
     now = utils.now()
     if now.hour < appsettings.get_int(db, "backup.hour"):
         return "Pas encore l'heure de la sauvegarde"
