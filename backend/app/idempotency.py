@@ -2,7 +2,8 @@
 from datetime import timedelta
 
 from fastapi import Request, Response
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError as JWTError
 from sqlalchemy.exc import IntegrityError
 
 from . import config, utils

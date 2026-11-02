@@ -7,6 +7,7 @@ Ce journal suit les évolutions notables de l'application. Format libre, en fran
 - Prise en charge de PostgreSQL (`OUTILLAGE_DATABASE_URL`, connexion chiffrée obligatoire en production) et d'un stockage de fichiers S3 privé, en plus du mode local SQLite. Procédure : `DEPLOIEMENT.md`.
 - En production, le premier compte admin n'est créé qu'avec `OUTILLAGE_ADMIN_PASSWORD` : `admin123` ne sert plus qu'en développement.
 - Déploiement Vercel : entrée `api/index.py`, cron `/cron/tick`, IP lue derrière le proxy, script `migrate_to_postgres.py`.
+- Sécurité : `python-jose` remplacé par PyJWT, dépendances mises à jour (aucune vulnérabilité connue selon pip-audit au 2026-11-02), taille des photos limitée, durée de réponse identique à la connexion pour un compte inconnu.
 - La suppression d'un compte retire ses données propres et vide les références facultatives. Elle est refusée s'il reste un historique à conserver (prêts, transferts...) : anonymiser le compte à la place.
 
 ## 1.0.0 — reconstruction complète et feuille de route phases 0-11

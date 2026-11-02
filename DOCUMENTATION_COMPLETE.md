@@ -84,7 +84,7 @@ Ce tableau est un instantané ; se référer au code pour le décompte exact (ce
 
 ## 3. PILE TECHNIQUE
 
-**Backend** : Python 3.12, FastAPI 0.115, Uvicorn 0.30, SQLAlchemy 2.0.35 (ORM synchrone), SQLite, Pydantic 2.9, passlib + bcrypt 4.0.1 (hash), python-jose (JWT HS256), python-multipart (upload), openpyxl 3.1.5 (Excel), httpx (tests), anthropic ≥ 1.7 (chatbot).
+**Backend** : Python 3.12, FastAPI 0.162, Uvicorn 0.54, SQLAlchemy 2.0.35 (ORM synchrone), SQLite, Pydantic 2.9, passlib + bcrypt 4.0.1 (hash), PyJWT (JWT HS256), python-multipart (upload), openpyxl 3.1.5 (Excel), httpx (tests), anthropic ≥ 1.7 (chatbot).
 
 **Frontend** : JavaScript vanilla en modules ES natifs, zéro framework, zéro bundler, zéro dépendance. Rendu par chaînes HTML injectées en `innerHTML`, router hash maison, code-barres Code 39 SVG fait maison, PWA (manifest + service worker).
 

@@ -1,4 +1,5 @@
 import hashlib
+from functools import lru_cache
 import re
 import secrets
 from datetime import timedelta
@@ -6,7 +7,8 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError as JWTError
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
@@ -50,9 +52,15 @@ def generate_temporary_password() -> str:
     return "".join(chars)
 
 
+@lru_cache(maxsize=1)
+def _decoy_hash() -> str:
+    return pwd_context.hash(secrets.token_urlsafe(16))
+
+
 def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
     user = db.query(User).filter(User.username == username).first()
     if not user or not user.is_active:
+        pwd_context.verify(password, _decoy_hash())  # même durée de réponse : ne révèle pas si le compte existe
         return None
     if not verify_password(password, user.hashed_password):
         return None

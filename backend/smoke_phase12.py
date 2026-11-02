@@ -44,6 +44,29 @@ try:
 finally:
     _cfg12.IS_PROD, _cfg12.ADMIN_PASSWORD, _cfg12.DATABASE_URL, _cfg12.TRUST_PROXY_HEADERS = _saved12
 
+import io as _io12
+
+from fastapi import HTTPException as _HE12, UploadFile as _UF12
+
+_big12 = _UF12(file=_io12.BytesIO(b"x" * (_ut12.MAX_DOCUMENT_BYTES + 1)), filename="grosse.jpg")
+try:
+    _ut12.save_upload_file(_big12, "test12")
+    _refused12 = False
+except _HE12 as exc:
+    _refused12 = exc.status_code == 400
+check("an oversized photo is refused", _refused12)
+_small12 = _ut12.save_upload_file(_UF12(file=_io12.BytesIO(b"petite"), filename="petite.png"), "test12")
+check("a normal photo is still saved", _small12.startswith("/uploads/test12/") and _small12.endswith(".png"))
+
+import jwt as _jwt12
+
+_forged12 = _jwt12.encode({"sub": "admin", "tv": 0}, "pas-la-bonne-cle-pas-la-bonne-cle-pas-la-bonne", algorithm="HS256")
+check("a token signed with another key is refused", client.get("/users", headers={"Authorization": f"Bearer {_forged12}"}).status_code == 401)
+_none12 = _jwt12.encode({"sub": "admin", "tv": 0}, None, algorithm="none")
+check("an unsigned token is refused", client.get("/users", headers={"Authorization": f"Bearer {_none12}"}).status_code == 401)
+check("an unknown account gets the same answer as a wrong password", client.post("/auth/login", json={"username": "inconnu12", "password": "x"}).status_code == 401)
+check("reports need an API key", client.get("/reports").status_code in (401, 403))
+
 _mgr12 = next(u["id"] for u in client.get("/users", headers=auth(admin_token)).json() if u["username"] == "charge101")
 _uid12 = make_user("del12", admin_token, "gars_chantier", manager_id=_mgr12)
 login("del12")

@@ -63,8 +63,13 @@ def save_document(file: UploadFile, subfolder: str, allowed=DOCUMENT_EXTENSIONS,
 
 
 def save_upload_file(file: UploadFile, subfolder: str) -> str:
+    from fastapi import HTTPException
+
+    content = file.file.read(MAX_DOCUMENT_BYTES + 1)
+    if len(content) > MAX_DOCUMENT_BYTES:
+        raise HTTPException(status_code=400, detail=f"Fichier trop volumineux (maximum {MAX_DOCUMENT_BYTES // (1024 * 1024)} Mo)")
     ext = Path(file.filename or "").suffix.lower()
     if ext not in ALLOWED_EXTENSIONS:
         ext = ".jpg"
 
-    return _store(subfolder, f"{uuid.uuid4().hex}{ext}", file.file.read())
+    return _store(subfolder, f"{uuid.uuid4().hex}{ext}", content)
