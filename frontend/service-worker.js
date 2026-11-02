@@ -1,4 +1,4 @@
-const CACHE_NAME = "outillage-shell-v44";
+const CACHE_NAME = "outillage-shell-v46";
 
 const APP_SHELL = [
   "/",
@@ -29,6 +29,8 @@ const APP_SHELL = [
   "/js/notifications.js",
   "/js/push.js",
   "/js/images.js",
+  "/js/cameraCapture.js",
+  "/js/vendor/zxing.min.js",
   "/js/signaturePad.js",
   "/js/inspectionForm.js",
   "/js/loanActions.js",

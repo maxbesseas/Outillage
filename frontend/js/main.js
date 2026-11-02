@@ -1,5 +1,6 @@
 import { registerRoute, startRouter, navigate } from "./router.js";
 import { initTheme } from "./theme.js";
+import { startWebcamPhotos } from "./cameraCapture.js";
 import { openGlobalSearch, initGlobalSearchShortcut } from "./globalSearch.js";
 import { state, isLoggedIn, isAdmin, isManager, clearSession } from "./state.js";
 import { api } from "./api.js";
@@ -311,6 +312,7 @@ window.addEventListener("offline", refreshSyncPill);
 
 initTheme();
 startAccessibleForms();
+startWebcamPhotos();
 initGlobalSearchShortcut();
 wireMenus();
 

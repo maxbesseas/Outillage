@@ -1,6 +1,7 @@
 import { state, clearSession, setSession, reloadSession } from "./state.js";
 import { toast } from "./ui.js";
 import { navigate } from "./router.js";
+import { compressImage } from "./images.js";
 
 export class ApiError extends Error {
   constructor(message, status) {
@@ -9,6 +10,7 @@ export class ApiError extends Error {
   }
 }
 
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 const NO_REFRESH_PATHS = ["/auth/login", "/auth/refresh", "/auth/forgot-password", "/auth/reset-password"];
 
 function checkSyncHeaders(res) {
@@ -133,9 +135,11 @@ export const api = {
   delete(path, body) {
     return request(path, { method: "DELETE", body: body !== undefined ? JSON.stringify(body) : undefined });
   },
-  upload(path, file) {
+  async upload(path, file) {
+    const toSend = await compressImage(file);
+    if (toSend.size > MAX_UPLOAD_BYTES) throw new ApiError("Fichier trop volumineux (4 Mo maximum)", 413);
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", toSend);
     return request(path, { method: "POST", body: formData });
   },
   async getPage(path) {
