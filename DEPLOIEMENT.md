@@ -30,7 +30,7 @@ Relancer `app.db_setup` après chaque nouvelle migration : sur Vercel, le schém
 
 ## 3. Vercel
 
-1. Plan **Pro** : le plan Hobby exclut l'usage commercial et limite les crons à un par jour.
+1. Plan **Hobby**, réservé à un usage personnel et non commercial, avec un seul cron par jour. Pour un usage commercial, passer au plan Pro, puis rapprocher le cron dans `vercel.json` (par exemple `*/5 * * * *`).
 2. Importer le dépôt, sans framework. La configuration est dans `vercel.json`.
 3. Renseigner les variables d'environnement listées dans `.env.example`, sauf `OUTILLAGE_ADMIN_PASSWORD`, inutile une fois le compte créé. Ne pas ajouter `ANTHROPIC_API_KEY` : l'assistant IA reste désactivé et aucune donnée n'est envoyée.
 4. Déployer, puis contrôler `/health/ready` et se connecter avec `admin` : le mot de passe doit être changé à la première connexion.
@@ -39,7 +39,8 @@ Relancer `app.db_setup` après chaque nouvelle migration : sur Vercel, le schém
 
 | Sujet | Sur Vercel |
 | --- | --- |
-| Tâches planifiées | `/cron/tick` toutes les 5 minutes, protégé par `CRON_SECRET` |
+| Tâches planifiées | `/cron/tick` une fois par jour, entre 7 h et 8 h UTC, protégé par `CRON_SECRET`. Réservations non retirées, listes d'attente et alertes ne sont traitées qu'à ce moment-là |
+| Récapitulatif e-mail | Part seulement si le cron tombe dans l'heure du réglage `alert.digest_hour` : garder `7`, ou changer les deux ensemble |
 | Fichiers envoyés | S3 privé ; `/uploads/...` redirige vers une URL signée valable 5 minutes |
 | Taille des envois | 4 Mo maximum par document (limite Vercel : 4,5 Mo par requête) |
 | Sauvegardes | Assurées par Scaleway ; l'écran Sauvegardes de l'application reste vide |
