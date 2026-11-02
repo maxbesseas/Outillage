@@ -167,7 +167,7 @@ b.check("cliquer un résultat ouvre la fiche de l'outil", (await b.eval("locatio
 // ---------------------------------------------------------------- 5b. thème sombre et confirmations sans window.confirm()
 await b.route("#/mon-profil");
 await b.waitFor("!!document.querySelector('#theme-select')", "sélecteur de thème");
-b.check("le thème est clair par défaut", (await b.eval("document.documentElement.getAttribute('data-theme')")) === null);
+b.check("le thème est clair par défaut", (await b.eval("document.documentElement.getAttribute('data-theme')")) === "light");
 await b.setInput("#theme-select", "dark");
 await sleep(200);
 b.check("basculer sur sombre pose data-theme=dark", (await b.eval("document.documentElement.getAttribute('data-theme')")) === "dark");

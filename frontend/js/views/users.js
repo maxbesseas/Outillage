@@ -19,7 +19,7 @@ async function draw(app) {
     <div id="users-list">
       ${team.length ? team.map((u) => userCard(u)).join("") : `<div class="empty-state">Aucun utilisateur.</div>`}
     </div>
-    <button class="fab" id="add-user-fab">${icon("plus", { size: 22 })}</button>
+    <button class="fab" id="add-user-fab" aria-label="Ajouter un utilisateur">${icon("plus", { size: 22 })}</button>
   `;
 
   document.getElementById("add-user-fab").addEventListener("click", () => openUserForm(null, allUsers, () => draw(app)));

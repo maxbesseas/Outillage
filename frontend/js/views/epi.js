@@ -381,7 +381,7 @@ async function draw(app) {
     <div id="epi-list">
       ${filtered.length ? filtered.map((e) => epiCard(e)).join("") : `<div class="empty-state">Aucun EPI.</div>`}
     </div>
-    <button class="fab" id="add-epi-fab">${icon("plus", { size: 22 })}</button>
+    <button class="fab" id="add-epi-fab" aria-label="Ajouter un EPI">${icon("plus", { size: 22 })}</button>
   `;
 
   document.querySelectorAll("#epi-tabs button").forEach((btn) => {

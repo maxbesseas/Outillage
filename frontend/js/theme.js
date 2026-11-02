@@ -1,10 +1,10 @@
-const KEY = "outillage_theme"; // "light" | "dark" | absent (suit le système)
+const KEY = "outillage_theme"; // "light" | "dark" | "system" ; absent : clair
 
 export function getTheme() {
   try {
-    return localStorage.getItem(KEY) || "system";
+    return localStorage.getItem(KEY) || "light";
   } catch {
-    return "system";
+    return "light";
   }
 }
 
@@ -18,8 +18,7 @@ export function applyTheme(theme) {
 
 export function setTheme(theme) {
   try {
-    if (theme === "system") localStorage.removeItem(KEY);
-    else localStorage.setItem(KEY, theme);
+    localStorage.setItem(KEY, theme);
   } catch {
     // le thème reste appliqué pour la session en cours même si le stockage est indisponible
   }

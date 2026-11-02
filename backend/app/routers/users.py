@@ -233,6 +233,8 @@ def update_user(
 
     if "role" in data and data["role"] != user.role:
         revoke = True
+    if "email" in data and (data["email"] or "").lower() != (user.email or "").lower():
+        user.microsoft_tid = user.microsoft_oid = None
     if data.get("is_active") is False and user.is_active:
         revoke = True
 

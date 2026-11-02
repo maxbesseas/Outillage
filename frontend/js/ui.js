@@ -127,23 +127,86 @@ export function openModal(innerHtml, options = {}) {
   const backdrop = document.createElement("div");
   backdrop.className = "modal-backdrop";
   backdrop.id = "modal-backdrop";
-  backdrop.innerHTML = `<div class="modal">${innerHtml}</div>`;
+  backdrop.innerHTML = `<div class="modal" role="dialog" aria-modal="true" tabindex="-1">${innerHtml}</div>`;
 
   backdrop.addEventListener("click", (e) => {
     if (e.target === backdrop) closeModal();
   });
+  backdrop.addEventListener("keydown", (e) => handleModalKey(e, backdrop));
 
+  focusBeforeModal = document.activeElement;
   document.body.appendChild(backdrop);
   document.body.classList.add("modal-open");
 
   if (options.onMount) options.onMount(backdrop);
+  const modal = backdrop.querySelector(".modal");
+  if (!modal.contains(document.activeElement)) modal.focus();
   return backdrop;
+}
+
+let focusBeforeModal = null;
+const FOCUSABLE = "a[href], button:not([disabled]), input:not([disabled]):not([type=hidden]), select:not([disabled]), textarea:not([disabled])";
+
+function handleModalKey(event, backdrop) {
+  if (event.key === "Escape") {
+    event.stopPropagation();
+    const cancel = backdrop.querySelector("#confirm-no");
+    if (cancel) cancel.click();
+    else closeModal();
+    return;
+  }
+  if (event.key !== "Tab") return;
+  const items = [...backdrop.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null);
+  if (!items.length) return;
+  const first = items[0];
+  const last = items[items.length - 1];
+  const active = document.activeElement;
+  if (event.shiftKey && (active === first || !backdrop.contains(active) || active.classList.contains("modal"))) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 export function closeModal() {
   const existing = document.getElementById("modal-backdrop");
   if (existing) existing.remove();
   document.body.classList.remove("modal-open");
+  if (existing && focusBeforeModal && document.contains(focusBeforeModal)) focusBeforeModal.focus();
+  if (existing) focusBeforeModal = null;
+}
+
+let nextFieldId = 0;
+
+function labelFormControls() {
+  for (const field of document.querySelectorAll(".field")) {
+    const label = field.querySelector("label");
+    const control = field.querySelector("input:not([type=hidden]), select, textarea");
+    if (!label || !control || label.htmlFor || label.contains(control)) continue;
+    if (!control.id) control.id = `field-${++nextFieldId}`;
+    label.htmlFor = control.id;
+  }
+  for (const control of document.querySelectorAll("input:not([type=hidden]), select, textarea")) {
+    if (control.labels?.length || control.hasAttribute("aria-label") || control.hasAttribute("aria-labelledby")) continue;
+    const name = control.placeholder || control.title || control.options?.[0]?.textContent;
+    if (name) control.setAttribute("aria-label", name.trim());
+  }
+}
+
+/** Relie chaque champ à son libellé, sur tous les écrans y compris ceux affichés ensuite. */
+export function startAccessibleForms() {
+  let scheduled = false;
+  new MutationObserver(() => {
+    if (scheduled) return;
+    scheduled = true;
+    requestAnimationFrame(() => {
+      scheduled = false;
+      labelFormControls();
+    });
+  }).observe(document.body, { childList: true, subtree: true });
+  labelFormControls();
 }
 
 /** Remplace window.confirm() par une modale. Résout à true/false, ne rejette jamais. */

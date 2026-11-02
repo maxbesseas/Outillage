@@ -35,7 +35,7 @@ async function draw(app) {
     <div id="tf-list">
       ${filtered.length ? filtered.map((t) => transferCard(t)).join("") : `<div class="empty-state">Aucun prêt.</div>`}
     </div>
-    <button class="fab" id="add-transfer-fab">${icon("plus", { size: 22 })}</button>
+    <button class="fab" id="add-transfer-fab" aria-label="Nouveau prêt externe">${icon("plus", { size: 22 })}</button>
   `;
 
   document.querySelectorAll("#tf-filters button").forEach((btn) => {

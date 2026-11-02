@@ -149,6 +149,13 @@ def m007_sites(conn: Connection):
         )
 
 
+def m008_microsoft_login(conn: Connection):
+    add_column_if_missing(conn, "users", "microsoft_tid", "VARCHAR")
+    add_column_if_missing(conn, "users", "microsoft_oid", "VARCHAR")
+    if _table_exists(conn, "users"):
+        conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_microsoft ON users (microsoft_tid, microsoft_oid)"))
+
+
 MIGRATIONS: List[Tuple[int, str, Callable[[Connection], None]]] = [
     (1, "users: email, phone, must_change_password, token_version", m001_users_accounts),
     (2, "index de performance", m002_indexes),
@@ -157,6 +164,7 @@ MIGRATIONS: List[Tuple[int, str, Callable[[Connection], None]]] = [
     (5, "réservations : séries, signature, validation ; agences ; agenda", m005_loans_phase4),
     (6, "outils d'agence : sortie de parc et composition", m006_agency_tools_phase5),
     (7, "chantiers : table sites, rattachement des réservations et du stock, tarif journalier", m007_sites),
+    (8, "connexion Microsoft : identité liée au compte", m008_microsoft_login),
 ]
 
 

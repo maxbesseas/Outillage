@@ -52,6 +52,11 @@ S3_REGION = os.environ.get("OUTILLAGE_S3_REGION", "fr-par").strip()
 S3_ACCESS_KEY = os.environ.get("OUTILLAGE_S3_ACCESS_KEY") or None
 S3_SECRET_KEY = os.environ.get("OUTILLAGE_S3_SECRET_KEY") or None
 
+# Connexion Microsoft : désactivée tant que l'application Entra n'est pas renseignée.
+MS_CLIENT_ID = os.environ.get("OUTILLAGE_MS_CLIENT_ID", "").strip() or None
+MS_CLIENT_SECRET = os.environ.get("OUTILLAGE_MS_CLIENT_SECRET") or None
+MS_TENANT = os.environ.get("OUTILLAGE_MS_TENANT", "common").strip()
+
 LOGIN_MAX_FAILURES_USER = 5
 LOGIN_MAX_FAILURES_IP = 15
 

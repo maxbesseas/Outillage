@@ -123,7 +123,7 @@ export async function renderAgencyTools(app) {
         <button class="btn btn-primary" id="add-tool-btn">+ Outil</button>
         <button class="btn btn-primary" id="add-epi-btn">+ EPI</button>
       </div>
-      <button class="fab" id="add-fab">${icon("plus", { size: 22 })}</button>`
+      <button class="fab" id="add-fab" aria-label="Ajouter">${icon("plus", { size: 22 })}</button>`
         : ""
     }
   `;

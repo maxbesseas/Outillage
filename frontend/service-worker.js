@@ -1,4 +1,4 @@
-const CACHE_NAME = "outillage-shell-v34";
+const CACHE_NAME = "outillage-shell-v40";
 
 const APP_SHELL = [
   "/",
@@ -38,6 +38,9 @@ const APP_SHELL = [
   "/js/reportProblem.js",
   "/js/toolExtras.js",
   "/js/views/login.js",
+  "/js/views/toolBoard.js",
+  "/fonts/barlow-condensed-latin-600-normal.woff2",
+  "/fonts/barlow-condensed-latin-700-normal.woff2",
   "/js/views/dashboard.js",
   "/js/views/personalTools.js",
   "/js/views/agencyTools.js",

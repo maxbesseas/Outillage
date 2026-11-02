@@ -36,7 +36,7 @@ async function draw(app) {
       <button data-tab="done" class="${currentTab === "done" ? "active" : ""}">Rendus</button>
     </div>
     <div id="pt-body"></div>
-    <button class="fab" id="add-pt-fab">${icon("plus", { size: 22 })}</button>
+    <button class="fab" id="add-pt-fab" aria-label="Nouveau prêt entre collègues">${icon("plus", { size: 22 })}</button>
   `;
 
   document.querySelectorAll("#pt-tabs button").forEach((btn) => {

@@ -3,7 +3,7 @@ import { initTheme } from "./theme.js";
 import { openGlobalSearch, initGlobalSearchShortcut } from "./globalSearch.js";
 import { state, isLoggedIn, isAdmin, isManager, clearSession } from "./state.js";
 import { api } from "./api.js";
-import { wireImageFallbacks } from "./ui.js";
+import { wireImageFallbacks, escapeHtml, startAccessibleForms } from "./ui.js";
 import { startNotificationPolling, stopNotificationPolling } from "./notifications.js";
 import { icon } from "./icons.js";
 import { initAssistant, destroyAssistant } from "./assistant.js";
@@ -141,16 +141,16 @@ function buildChrome() {
     <div class="header-inner">
       <div class="header-brand">
         <div class="logo-box"><img src="/icons/fauche-logo-full.png" alt="Fauché" data-fallback-hide/></div>
-        <span>Gestion Outillage</span>
+        <span class="header-title">Gestion Outillage</span>
       </div>
       <nav class="header-nav">${navLinks()}</nav>
       <div class="header-user">
-        <button class="btn btn-ghost btn-sm" id="search-global" aria-label="Rechercher (touche /)">${icon("search", { size: 16 })} Rechercher</button>
-        <button class="btn btn-ghost btn-sm" id="scan-global" aria-label="Scanner un outil">${icon("camera", { size: 16 })} Scanner</button>
+        <button class="btn btn-ghost btn-sm" id="search-global" aria-label="Rechercher (touche /)">${icon("search", { size: 18 })}<span class="header-label">Rechercher</span></button>
+        <button class="btn btn-ghost btn-sm" id="scan-global" aria-label="Scanner un outil">${icon("camera", { size: 18 })}<span class="header-label">Scanner</span></button>
         <a href="#/synchronisation" class="sync-pill hidden" id="sync-pill" data-sync-pill></a>
-        <a href="#/mon-profil" class="user-name user-link">${state.user ? state.user.full_name : ""}</a>
-        ${isAdmin() ? '<a href="#/parametres" class="btn btn-ghost btn-sm">Paramètres</a>' : ""}
-        <button class="btn btn-ghost btn-sm" id="logout-btn">${icon("logout", { size: 16 })} Déconnexion</button>
+        <a href="#/mon-profil" class="user-name user-link" aria-label="Mon profil">${icon("userCheck", { size: 18 })}<span class="header-label">${state.user ? escapeHtml(state.user.full_name) : ""}</span></a>
+        ${isAdmin() ? `<a href="#/parametres" class="btn btn-ghost btn-sm" aria-label="Paramètres">${icon("wrench", { size: 18 })}<span class="header-label">Paramètres</span></a>` : ""}
+        <button class="btn btn-ghost btn-sm" id="logout-btn" aria-label="Déconnexion">${icon("logout", { size: 18 })}<span class="header-label">Déconnexion</span></button>
       </div>
     </div>
   `;
@@ -206,6 +206,7 @@ window.addEventListener("online", refreshSyncPill);
 window.addEventListener("offline", refreshSyncPill);
 
 initTheme();
+startAccessibleForms();
 initGlobalSearchShortcut();
 
 window.addEventListener("hashchange", buildChrome);

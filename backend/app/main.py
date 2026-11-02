@@ -16,6 +16,7 @@ from .idempotency import idempotency_middleware
 from .jobs import scheduler
 from .models import User, UserRole
 from .routers import (
+    microsoft,
     admin,
     agencies,
     agency_tools,
@@ -128,6 +129,7 @@ else:
     app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 app.include_router(auth.router)
+app.include_router(microsoft.router)
 app.include_router(users.router)
 app.include_router(agencies.router)
 app.include_router(personal_tools.router)

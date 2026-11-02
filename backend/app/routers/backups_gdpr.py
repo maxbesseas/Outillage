@@ -149,6 +149,7 @@ def anonymize_user(user_id: int, request: Request, db: Session = Depends(get_db)
     target.phone = None
     target.is_active = False
     target.calendar_token = None
+    target.microsoft_tid = target.microsoft_oid = None
     target.hashed_password = hash_password(secrets.token_urlsafe(32))
     target.must_change_password = True
     invalidate_sessions(db, target)

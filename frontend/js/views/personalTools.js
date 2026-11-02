@@ -73,7 +73,7 @@ async function draw(app) {
     <div id="tool-list">
       ${filtered.length ? filtered.map((t) => toolCard(t, ownerId)).join("") : `<div class="empty-state">Aucun outil.</div>`}
     </div>
-    <button class="fab" id="add-tool-fab">${icon("plus", { size: 22 })}</button>
+    <button class="fab" id="add-tool-fab" aria-label="Ajouter un outil">${icon("plus", { size: 22 })}</button>
   `;
 
   if (isTeamView) {

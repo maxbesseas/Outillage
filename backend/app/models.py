@@ -98,6 +98,8 @@ class User(Base):
     must_change_password = Column(Boolean, default=False, nullable=False, server_default="0")
     token_version = Column(Integer, default=0, nullable=False, server_default="0")
     calendar_token = Column(String, nullable=True, unique=True)
+    microsoft_tid = Column(String, nullable=True)
+    microsoft_oid = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     manager = relationship("User", remote_side=[id])
