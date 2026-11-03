@@ -97,7 +97,7 @@ def sync_new_agency_tool(tool: AgencyTool, registry_name=None) -> Tuple[bool, st
         return False, f"Échec synchro Excel : {exc}"
 
 
-def export_agency_tools_workbook(tools: Iterable[AgencyTool]) -> BytesIO:
+def export_agency_tools_workbook(tools: Iterable[AgencyTool], hide_prices: bool = False) -> BytesIO:
     wb = Workbook()
     ws = wb.active
     ws.append(COLUMNS)
@@ -113,7 +113,7 @@ def export_agency_tools_workbook(tools: Iterable[AgencyTool]) -> BytesIO:
             tool.type,
             tool.serial_number,
             tool.purchase_date,
-            tool.purchase_price,
+            None if hide_prices else tool.purchase_price,
             tool.warranty_expiration_date,
             _warranty_status(tool.warranty_expiration_date),
             _state_label(tool.status, tool.state),

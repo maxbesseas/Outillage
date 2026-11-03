@@ -61,6 +61,8 @@ pg_dump --format=custom --file=outillage.dump "<adresse de la base>"
 
 Le fichier obtenu contient toutes les données, comptes compris : le garder hors du dépôt. Il ne contient pas les photos ni les documents : copier aussi le compartiment. Tester une restauration sur une base vide au moins une fois.
 
+Sauvegarde sans outils PostgreSQL : `backend/sauvegarde.py` crée un fichier zip avec la base et les fichiers du compartiment, et le restaure sur une base vide. `tools/sauvegarde/installer_tache.ps1` le programme chaque jour sur ce poste. Les sauvegardes contiennent toutes les données : gardez-les hors du dépôt.
+
 ## 5. Mettre à jour une base existante
 
 Dans cet ordre, sinon l'application ne trouve pas ses nouvelles colonnes :

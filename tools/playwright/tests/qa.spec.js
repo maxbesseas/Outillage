@@ -178,6 +178,15 @@ test("QA-10 : l'inventaire et les étiquettes restent légers avec beaucoup d'ou
   await expect(page.locator("#history-close")).toBeVisible();
   await page.locator("#history-close").click();
 
+  await open(page, "/controles");
+  await expect(page.locator("#due-more")).toBeVisible({ timeout: 30000 });
+  expect(await page.locator('#due-list [data-action="inspect"]').count()).toBe(100);
+  await page.locator("#due-more").click();
+  expect(await page.locator('#due-list [data-action="inspect"]').count()).toBe(200);
+  await page.locator('#due-list [data-action="inspect"]').nth(150).click();
+  await expect(page.locator(".modal, #modal-backdrop").first()).toBeVisible();
+  await page.evaluate(() => document.getElementById("modal-backdrop")?.remove());
+
   await open(page, "/etiquettes");
   await expect(page.locator("#labels-preview")).toBeVisible({ timeout: 30000 });
   expect(await page.locator("#labels-sheet .label-card").count()).toBe(100);
@@ -248,12 +257,12 @@ test("QA-16 : le personnel de chantier ne voit aucun prix", async ({ page, reque
   const tools = await (await request.get("/agency-tools", { headers: bearer(worker) })).json();
   expect(tools.length).toBeGreaterThan(0);
   expect(tools.every((t) => t.purchase_price === null && t.daily_rate === null)).toBe(true);
-  expect((await request.get("/agency-tools/export", { headers: bearer(worker) })).status()).toBe(403);
+  expect((await request.get("/agency-tools/export", { headers: bearer(worker) })).status()).toBe(200);
 
   await login(page, WORKER);
   await open(page, "/agence");
   await expect(page.locator("#items-list")).toBeVisible();
-  await expect(page.locator("#export-btn")).toHaveCount(0);
+  await expect(page.locator("#export-btn")).toBeVisible();
   await expect(page.locator("#app")).not.toContainText("€");
 });
 

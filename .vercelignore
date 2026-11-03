@@ -24,3 +24,4 @@ backend/sql/
 .github/
 QA_REPORT.md
 backend/reset_admin.py
+backend/sauvegarde.py

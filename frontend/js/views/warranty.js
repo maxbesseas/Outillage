@@ -1,7 +1,9 @@
 import { api } from "../api.js";
 import { escapeHtml, formatDate } from "../ui.js";
 
+const PAGE_SIZE = 200;
 let filters = { q: "", type: "", status: "" };
+let limit = PAGE_SIZE;
 
 function warrantyStatus(tool) {
   if (!tool.warranty_expiration_date) return "none";
@@ -72,6 +74,7 @@ function draw(app, tools) {
         <thead><tr><th>Outil</th><th>Type</th><th>Achat</th><th>Fin de garantie</th><th>Statut</th></tr></thead>
         <tbody>
           ${filtered
+            .slice(0, limit)
             .map((t) => {
               const ws = warrantyStatus(t);
               const badge =
@@ -92,7 +95,13 @@ function draw(app, tools) {
         </tbody>
       </table>
     </div>
+    ${filtered.length > limit ? `<div class="load-more"><button class="btn" id="w-more">Afficher plus (${limit} sur ${filtered.length})</button></div>` : ""}
   `;
+
+  document.getElementById("w-more")?.addEventListener("click", () => {
+    limit += PAGE_SIZE;
+    draw(app, tools);
+  });
 
   document.getElementById("w-search").addEventListener("input", (e) => {
     filters.q = e.target.value;

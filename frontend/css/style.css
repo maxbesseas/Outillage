@@ -2211,8 +2211,9 @@ table.simple-table th {
     min-height: 32px;
   }
 
-  .pref-table input[type="checkbox"] {
+  #app input[type="checkbox"] {
     width: 32px;
     height: 32px;
+    vertical-align: middle;
   }
 }

@@ -74,7 +74,7 @@ export async function renderAgencyTools(app) {
       <h1>Agence — Outillage &amp; EPI</h1>
       <div class="section-links">
         ${isManager() ? '<a href="#/garanties">Garanties</a>' : ""}
-        ${isManager() ? '<button class="btn btn-sm" id="export-btn">Exporter en Excel</button>' : ""}
+        <button class="btn btn-sm" id="export-btn">Exporter en Excel</button>
       </div>
     </div>
 

@@ -10,6 +10,7 @@ const STATUS = {
 };
 const KIND_LABEL = { agency: "Outil d'agence", epi: "EPI", personal: "Outil personnel" };
 
+const PAGE_SIZE = 100;
 let filter = { kind: "", status: "" };
 
 function card(item) {
@@ -67,8 +68,17 @@ export async function renderControls(app) {
       </div>
     </div>
     <div class="filter-count">${items.length} élément(s)</div>
-    <div id="due-list">${items.length ? items.map(card).join("") : `<div class="empty-state">Aucun contrôle en attente.</div>`}</div>
+    <div id="due-list">${items.length ? items.slice(0, PAGE_SIZE).map(card).join("") : `<div class="empty-state">Aucun contrôle en attente.</div>`}</div>
+    ${items.length > PAGE_SIZE ? `<div class="load-more"><button class="btn" id="due-more">Afficher plus (${PAGE_SIZE} sur ${items.length})</button></div>` : ""}
   `;
+
+  let shown = Math.min(PAGE_SIZE, items.length);
+  document.getElementById("due-more")?.addEventListener("click", (e) => {
+    document.getElementById("due-list").insertAdjacentHTML("beforeend", items.slice(shown, shown + PAGE_SIZE).map(card).join(""));
+    shown = Math.min(shown + PAGE_SIZE, items.length);
+    if (shown >= items.length) e.target.closest(".load-more").remove();
+    else e.target.textContent = `Afficher plus (${shown} sur ${items.length})`;
+  });
 
   document.getElementById("f-kind").addEventListener("change", (e) => {
     filter.kind = e.target.value;

@@ -184,6 +184,9 @@ MIGRATIONS: List[Tuple[int, str, Callable[[Connection], None]]] = [
 
 
 def _ensure_table(conn: Connection):
+    # Le rôle applicatif ne peut pas créer de table : on ne le tente que si elle manque.
+    if _table_exists(conn, "schema_migrations"):
+        return
     conn.execute(
         text(_ddl(conn,
             "CREATE TABLE IF NOT EXISTS schema_migrations ("

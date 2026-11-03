@@ -459,7 +459,11 @@ _pr = client.post("/agency-tools", headers=_mh2, json={"name": "Prix QA", "uniqu
 _gl = next(t for t in client.get("/agency-tools", headers=_wh).json() if t["id"] == _pr["id"])
 check("QA-16: a site worker gets no price in the list", _gl["purchase_price"] is None and _gl["daily_rate"] is None)
 check("QA-16: nor on the tool sheet", client.get(f"/agency-tools/{_pr['id']}", headers=_wh).json()["purchase_price"] is None)
-check("QA-16: the export is refused to him", client.get("/agency-tools/export", headers=_wh).status_code == 403)
+_xw = _load_wb_sec(_io_sec.BytesIO(client.get("/agency-tools/export", headers=_wh).content)).active
+_xrow = next(row for row in _xw.iter_rows(values_only=True) if row[1] == "SEC-QA-PRIX")
+check("QA-16: his export has no price", _xrow[8] is None)
+_xm = _load_wb_sec(_io_sec.BytesIO(client.get("/agency-tools/export", headers=_mh2).content)).active
+check("QA-16: a manager's export keeps it", next(row for row in _xm.iter_rows(values_only=True) if row[1] == "SEC-QA-PRIX")[8] == 900)
 check("QA-16: a manager keeps the price", client.get(f"/agency-tools/{_pr['id']}", headers=_mh2).json()["purchase_price"] == 900)
 _ctl = client.post(f"/agency-tools/{_pr['id']}/control", headers=_wh, json={"state": 4, "status": "disponible"})
 check("QA-16: the control answer hides the price", _ctl.status_code == 200 and _ctl.json()["purchase_price"] is None)

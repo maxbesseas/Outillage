@@ -142,11 +142,11 @@ def financial_summary(db: Session = Depends(get_db), current_user: User = Depend
 
 
 @router.get("/export")
-def export_agency_tools(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_manager)):
+def export_agency_tools(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     tools = _scope_query(db.query(AgencyTool), current_user).order_by(AgencyTool.name).all()
     audit.record(db, "export_agency_tools", current_user.id, "agency_tool", None, request, {"count": len(tools)})
     db.commit()
-    buffer = export_agency_tools_workbook(tools)
+    buffer = export_agency_tools_workbook(tools, hide_prices=current_user.role == UserRole.gars_chantier)
 
     filename_scope = current_user.agency_number if current_user.role != UserRole.admin else None
     filename = f"Outillage-{filename_scope or 'toutes-agences'}.xlsx"

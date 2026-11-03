@@ -183,7 +183,7 @@ export async function renderExports(app) {
     </tbody></table></div>
     ${isAdmin() ? `<h3>Clés d'accès API (lecture seule)</h3>
       <p class="card-sub">Pour brancher un outil de reporting : <code>GET /reports/{jeu}</code> avec l'en-tête <code>X-API-Key</code>. 60 requêtes par minute et par clé.</p>
-      <form id="k-form" class="filter-bar"><input name="name" placeholder="Nom de la clé" required/><input name="agency" placeholder="Agence (vide = toutes)"/><input name="days" type="number" min="1" placeholder="Validité (jours)"/><button class="btn btn-sm">Créer une clé</button></form>
+      <form id="k-form" class="filter-bar"><input name="name" aria-label="Nom de la clé" placeholder="Nom de la clé" required/><input name="agency" aria-label="Agence" placeholder="Agence (vide = toutes)"/><input name="days" aria-label="Validité en jours" type="number" min="1" placeholder="Validité (jours)"/><button class="btn btn-sm">Créer une clé</button></form>
       ${keys.map((k) => `<div class="card"><div class="card-row"><div class="card-title">${escapeHtml(k.name)} <span class="card-sub">${escapeHtml(k.prefix)}…</span></div>
         <span class="badge badge-${k.is_active ? "green" : "gray"}">${k.is_active ? "Active" : "Révoquée"}</span></div>
         <div class="card-sub">${k.agency_number ? `Agence ${escapeHtml(k.agency_number)}` : "Toutes agences"} · créée le ${formatDate(k.created_at)}${k.last_used_at ? ` · utilisée le ${formatDate(k.last_used_at)}` : " · jamais utilisée"}${k.expires_at ? ` · expire le ${formatDate(k.expires_at)}` : ""}</div>

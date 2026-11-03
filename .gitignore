@@ -45,3 +45,4 @@ tools/playwright/.run/
 # Rapports : décrivent des attaques, à ne pas publier
 SECURITY_AUDIT.md
 QA_REPORT.md
+CHARTE_A_VALIDER.md

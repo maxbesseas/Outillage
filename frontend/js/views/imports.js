@@ -44,8 +44,8 @@ export async function renderImports(app) {
     <p class="card-sub">Importez un fichier Excel (.xlsx) ou CSV. Vous verrez d'abord une simulation ligne par ligne : rien n'est enregistré tant que vous ne validez pas.</p>
     <h3>1. Choisir le fichier</h3>
     <div class="filter-bar">
-      <select id="imp-target">${Object.entries(TARGET_LABEL).filter(([k]) => k !== "users" || canUsers).map(([k, v]) => `<option value="${k}" ${w.target === k ? "selected" : ""}>${v}</option>`).join("")}</select>
-      <input type="file" id="imp-file" accept=".xlsx,.csv,.txt"/>
+      <select id="imp-target" aria-label="Type de données à importer">${Object.entries(TARGET_LABEL).filter(([k]) => k !== "users" || canUsers).map(([k, v]) => `<option value="${k}" ${w.target === k ? "selected" : ""}>${v}</option>`).join("")}</select>
+      <input type="file" id="imp-file" aria-label="Fichier à importer" accept=".xlsx,.csv,.txt"/>
       <a class="btn btn-sm" href="#" id="imp-template">Télécharger un modèle</a>
     </div>
     ${mappingHtml}
