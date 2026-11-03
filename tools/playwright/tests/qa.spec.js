@@ -146,3 +146,20 @@ test("QA-09 : les étiquettes annoncent quand la liste est coupée", async ({ pa
   await expect(notice).toHaveCount(0, { timeout: 30000 });
   await expect(page.locator("#print-btn")).toContainText("10 étiquette");
 });
+
+test("QA-20 : un écran lent ne remplace pas l'écran demandé ensuite", async ({ page }) => {
+  await login(page, MANAGER);
+  await open(page, "/mes-outils");
+  await page.route("**/inspections/due**", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 2500));
+    await route.continue();
+  });
+  await page.evaluate(() => { location.hash = "/"; });
+  await page.waitForTimeout(200);
+  await page.evaluate(() => { location.hash = "/chantiers"; });
+  await expect(page.locator("#new-site")).toBeVisible();
+  await page.waitForTimeout(3500);
+  await expect(page.locator("#new-site")).toBeVisible();
+  expect(await page.evaluate(() => location.hash)).toBe("#/chantiers");
+});
+

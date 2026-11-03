@@ -42,6 +42,9 @@ export function navigate(path) {
   location.hash = path;
 }
 
+let lastStarted = 0;
+let lastFinished = 0;
+
 async function renderRoute() {
   closeModal();
   const app = document.getElementById("app");
@@ -73,9 +76,16 @@ async function renderRoute() {
     return;
   }
 
+  const token = ++lastStarted;
   app.innerHTML = `<div class="section-loading">Chargement…</div>`;
   try {
     await route.renderFn(app, { ...params, query });
+    // Un écran lent qui se termine après le suivant vient de l'écraser : on réaffiche l'écran demandé.
+    if (token < lastFinished) {
+      renderRoute();
+      return;
+    }
+    lastFinished = token;
   } catch (err) {
     console.error(err);
     app.innerHTML = `<div class="empty-state">Une erreur est survenue : ${String(err.message || err).replace(/</g, "&lt;")}</div>`;
