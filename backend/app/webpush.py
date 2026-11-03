@@ -15,7 +15,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from sqlalchemy.orm import Session
 
-from . import appsettings, utils
+from . import appsettings, secrets_box, utils
 from .models_ext import PushSubscription
 
 VAPID_KEY_SETTING = "vapid.private_pem"
@@ -36,13 +36,18 @@ def _public_bytes(public_key) -> bytes:
 
 
 def get_vapid_key(db: Session):
-    pem = os.environ.get("OUTILLAGE_VAPID_PRIVATE_KEY") or appsettings.get(db, VAPID_KEY_SETTING)
+    pem = os.environ.get("OUTILLAGE_VAPID_PRIVATE_KEY")
+    if not pem:
+        stored = appsettings.get(db, VAPID_KEY_SETTING)
+        pem = secrets_box.unseal(stored)
+        if pem and not secrets_box.is_sealed(stored):
+            appsettings.set_value(db, VAPID_KEY_SETTING, secrets_box.seal(pem))
     if not pem:
         key = ec.generate_private_key(ec.SECP256R1())
         pem = key.private_bytes(
             serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()
         ).decode()
-        appsettings.set_value(db, VAPID_KEY_SETTING, pem)
+        appsettings.set_value(db, VAPID_KEY_SETTING, secrets_box.seal(pem))
         db.flush()
     return serialization.load_pem_private_key(pem.encode(), password=None)
 
@@ -106,10 +111,30 @@ def vapid_headers(db: Session, endpoint: str) -> Dict[str, str]:
     return {"Authorization": f"vapid t={token}, k={public_key_b64(db)}"}
 
 
+# Services de notification des navigateurs : aucune autre adresse n'est contactée par le serveur.
+PUSH_HOST_SUFFIXES = ("fcm.googleapis.com", "push.services.mozilla.com", "notify.windows.com", "push.apple.com")
+
+
+def valid_endpoint(endpoint: str) -> bool:
+    parsed = urlparse(endpoint)
+    host = parsed.hostname or ""
+    return parsed.scheme == "https" and any(host == s or host.endswith("." + s) for s in PUSH_HOST_SUFFIXES)
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        return None
+
+
+_opener = urllib.request.build_opener(_NoRedirect)
+
+
 def _http_transport(endpoint: str, headers: Dict[str, str], body: bytes) -> int:
+    if not valid_endpoint(endpoint):
+        return 0
     request = urllib.request.Request(endpoint, data=body, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
+        with _opener.open(request, timeout=10) as response:
             return response.status
     except urllib.error.HTTPError as exc:
         return exc.code

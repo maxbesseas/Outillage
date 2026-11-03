@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import audit, controls, schemas
-from ..agencies import require_agency
+from ..agencies import check_same_agency, require_agency
 from ..auth import get_current_admin, get_current_manager, get_current_user
 from ..database import get_db
 from ..history import log_state_change
@@ -125,11 +125,13 @@ def get_epi(epi_id: int, db: Session = Depends(get_db), current_user: User = Dep
 def update_epi(
     epi_id: int,
     payload: schemas.EpiUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_manager),
 ):
     epi = _get_scoped_or_404(db, epi_id, current_user)
     data = payload.model_dump(exclude_unset=True)
+    check_same_agency(db, current_user, data.get("assigned_to_id"), epi.agency_number)
 
     old_state = epi.state
     for field, value in data.items():
@@ -140,6 +142,7 @@ def update_epi(
             db, ToolKind.epi, epi.id, old_state, epi.state, None, None,
             current_user.id, "édition",
         )
+    audit.record(db, "epi_updated", current_user.id, "epi", epi.id, request, {"fields": sorted(data)})
 
     db.commit()
     db.refresh(epi)

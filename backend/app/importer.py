@@ -20,6 +20,7 @@ from .agencies import require_agency
 from .auth import generate_temporary_password
 from .history import log_state_change
 from .models import AgencyTool, AgencyToolStatus, Epi, ToolKind, User, UserRole
+from .schemas import MAX_AMOUNT, MAX_DATE, MIN_DATE
 
 MAX_BYTES = 5 * 1024 * 1024
 MAX_ROWS = 20000
@@ -101,7 +102,12 @@ def read_table(content: bytes, filename: str, sheet: Optional[str] = None) -> Tu
             raise ImportFileError("Fichier Excel illisible (format .xlsx attendu)")
         sheets = list(wb.sheetnames)
         used = sheet if sheet in sheets else sheets[0]
-        rows = [list(r) for r in wb[used].iter_rows(values_only=True)]
+        rows = []
+        for r in wb[used].iter_rows(values_only=True):
+            if any(c not in (None, "") for c in r):
+                rows.append(list(r))
+            if len(rows) - 1 > MAX_ROWS:
+                raise ImportFileError(f"Trop de lignes (maximum {MAX_ROWS})")
     else:
         raise ImportFileError("Format non pris en charge (.xlsx ou .csv)")
     rows = [r for r in rows if any(c not in (None, "") for c in r)]
@@ -245,6 +251,12 @@ def _tool_values(target: str, row, mapping) -> Tuple[dict, List[str]]:
             continue
         if field in ("purchase_price", "daily_rate") and value is not None and value < 0:
             errors.append(f"{TARGETS[target][field][0]} : la valeur ne peut pas être négative")
+            continue
+        if field in ("purchase_price", "daily_rate") and value is not None and value > MAX_AMOUNT:
+            errors.append(f"{TARGETS[target][field][0]} : montant trop élevé")
+            continue
+        if isinstance(value, datetime) and not MIN_DATE <= value <= MAX_DATE:
+            errors.append(f"{TARGETS[target][field][0]} : date hors des limites acceptées")
             continue
         if raw not in (None, ""):
             data[field] = value

@@ -47,6 +47,48 @@ def purge_expired_tokens(db: Session) -> str:
     return f"{refresh_count} jeton(s) de session et {reset_count} jeton(s) de réinitialisation supprimé(s)"
 
 
+def purge_rate_events(db: Session) -> str:
+    from . import limits
+
+    return f"{limits.purge_old(db)} compteur(s) anti-abus supprimé(s)"
+
+
+def purge_personal_data(db: Session) -> str:
+    from . import appsettings
+    from .models import AuditLog
+    from .models_ext import Notification
+    from .models_p9 import AssistantMessage
+
+    now = utils.now()
+    audit_rows = db.query(AuditLog).filter(AuditLog.created_at < now - timedelta(days=appsettings.get_int(db, "retention.audit_days"))).delete(synchronize_session=False)
+    assistant = db.query(AssistantMessage).filter(AssistantMessage.created_at < now - timedelta(days=appsettings.get_int(db, "retention.assistant_days"))).delete(synchronize_session=False)
+    notes = db.query(Notification).filter(Notification.created_at < now - timedelta(days=appsettings.get_int(db, "retention.notification_days"))).delete(synchronize_session=False)
+    return f"{audit_rows} ligne(s) de journal, {assistant} échange(s), {notes} notification(s) supprimé(s)"
+
+
+SECURITY_THRESHOLDS = {"login_failed": 100, "access_denied": 50, "export": 50}
+
+
+def security_alerts(db: Session) -> str:
+    """Prévient les administrateurs d'un pic d'échecs, de refus ou d'exports sur 24 heures."""
+    from . import notify
+    from .models import AuditLog, User, UserRole
+
+    since = utils.now() - timedelta(hours=24)
+    peaks = {}
+    for action, threshold in SECURITY_THRESHOLDS.items():
+        count = db.query(AuditLog).filter(AuditLog.action == action, AuditLog.created_at >= since).count()
+        if count >= threshold:
+            peaks[action] = count
+    if not peaks:
+        return "aucun pic"
+    body = ", ".join(f"{action} : {count}" for action, count in peaks.items())
+    for admin in db.query(User).filter(User.role == UserRole.admin, User.is_active.is_(True)):
+        notify.create(db, admin.id, "generic", "Activité inhabituelle détectée", f"Sur 24 h : {body}. Consultez le journal d'audit.",
+                      severity="critical", link="#/audit", dedup_key=f"security:{admin.id}:{utils.now().date().isoformat()}")
+    return body
+
+
 def generate_alerts(db: Session) -> str:
     from . import alerts
 
@@ -102,6 +144,9 @@ JOBS: Dict[str, Job] = {
     "retry_excel_sync": Job("Reprise des mises à jour Excel en attente (fichier verrouillé)", 300, retry_excel_sync),
     "backup_daily": Job("Sauvegarde quotidienne de la base et des fichiers", 3600, backup_daily),
     "cleanup_orphan_uploads": Job("Purge des fichiers orphelins du dossier uploads", 86400, cleanup_orphan_uploads),
+    "purge_personal_data": Job("Purge selon les durées de conservation (journal, assistant, notifications)", 86400, purge_personal_data),
+    "security_alerts": Job("Alerte des administrateurs en cas d'activité inhabituelle", 3600, security_alerts),
+    "purge_rate_events": Job("Purge des compteurs anti-abus de plus de 2 jours", 86400, purge_rate_events),
     "purge_idempotency": Job("Purge des clés d'idempotence de plus de 7 jours", 86400, purge_idempotency),
 }
 

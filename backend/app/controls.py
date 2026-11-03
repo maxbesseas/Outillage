@@ -44,6 +44,22 @@ def tool_agency(db: Session, kind: str, tool) -> Optional[str]:
     return tool.agency_number
 
 
+REPORTABLE_STATUSES = ("reparation", "hors_service")
+
+
+def status_change_error(user: User, old: str, new: str) -> Optional[str]:
+    """Message de refus d'un changement de statut d'outil d'agence, None s'il est permis."""
+    if old == new:
+        return None
+    if new == SORTI:
+        return "Une sortie de parc passe par la demande de sortie, validée par le directeur"
+    if old == SORTI and user.role != UserRole.admin:
+        return "Seul l'administrateur peut remettre un outil sorti du parc"
+    if user.role == UserRole.gars_chantier and new not in REPORTABLE_STATUSES:
+        return "Ce changement de statut est réservé aux responsables"
+    return None
+
+
 def can_access(db: Session, user: User, kind: str, tool) -> bool:
     if user.role == UserRole.admin:
         return True

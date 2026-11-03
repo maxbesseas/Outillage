@@ -1,10 +1,16 @@
-import { api } from "./api.js";
-import { openModal, closeModal, stateHistoryCard, escapeHtml } from "./ui.js";
+import { api, ApiError } from "./api.js";
+import { openModal, closeModal, stateHistoryCard, escapeHtml, toast } from "./ui.js";
 import { getAllUsers, getUserName } from "./usersCache.js";
 
 export async function openToolHistory(kind, toolId, toolName) {
   await getAllUsers();
-  const history = await api.get(`/state-history?kind=${kind}&tool_id=${toolId}`);
+  let history;
+  try {
+    history = await api.get(`/state-history?kind=${kind}&tool_id=${toolId}`);
+  } catch (err) {
+    toast(err instanceof ApiError ? err.message : "Historique indisponible", "error");
+    return;
+  }
 
   const body = history.length
     ? history.map((h) => stateHistoryCard(h, getUserName(h.changed_by_id))).join("")

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from .. import audit, schemas
+from .. import audit, schemas, secrets_box
 from ..auth import get_current_admin
 from ..database import get_db
 from ..notifications import get_settings
@@ -38,6 +38,8 @@ def update_settings(
     if "smtp_password" in data and not data["smtp_password"]:
         del data["smtp_password"]
 
+    if data.get("smtp_password"):
+        data["smtp_password"] = secrets_box.seal(data["smtp_password"])
     for field, value in data.items():
         setattr(settings, field, value)
 

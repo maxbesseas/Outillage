@@ -1,11 +1,12 @@
 """Phase 3 : fiche outil unifiée, recherche par code (scan), lots de scan, galerie photos."""
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from .. import controls, maintenance, utils
+from .. import audit, controls, maintenance, utils
+from ..agencies import agency_scope
 from ..auth import get_current_manager, get_current_user
 from ..database import get_db
 from ..models import AgencyTool, AgencyToolStatus, Epi, Loan, LoanStatus, PersonalTool, User, UserRole
@@ -17,6 +18,7 @@ photos_router = APIRouter(prefix="/tool-photos", tags=["terrain"])
 
 PHOTO_KINDS = ("reference", "etat", "dommage", "autre")
 MAX_PHOTOS_PER_TOOL = 40
+LABELS_LIMIT = 2000
 
 
 def _fail(message: str, code: int = status.HTTP_400_BAD_REQUEST):
@@ -80,8 +82,8 @@ def lookup_batch(payload: BatchIn, db: Session = Depends(get_db), current_user: 
 
 
 @router.get("/labels")
-def label_list(kind: str = "agency", type_: Optional[str] = None, only_unprinted: bool = False, q: Optional[str] = None,
-               db: Session = Depends(get_db), current_user: User = Depends(get_current_manager)):
+def label_list(response: Response, kind: str = "agency", type_: Optional[str] = None, only_unprinted: bool = False, q: Optional[str] = None,
+               limit: int = LABELS_LIMIT, offset: int = 0, db: Session = Depends(get_db), current_user: User = Depends(get_current_manager)):
     if kind not in ("agency", "epi"):
         _fail("Étiquettes disponibles pour les outils d'agence et les EPI")
     model = controls.MODELS[kind]
@@ -96,13 +98,13 @@ def label_list(kind: str = "agency", type_: Optional[str] = None, only_unprinted
         like = f"%{q}%"
         query = query.filter((model.name.ilike(like)) | (model.unique_code.ilike(like)))
     printed = {r.tool_id: r.printed_at for r in db.query(ToolLabel).filter_by(tool_kind=kind)}
-    rows = [
+    if only_unprinted and printed:
+        query = query.filter(model.id.notin_(list(printed)))
+    response.headers["X-Total-Count"] = str(query.count())
+    return [
         {"id": t.id, "name": t.name, "type": t.type, "unique_code": t.unique_code, "printed_at": printed.get(t.id)}
-        for t in query.order_by(model.name).limit(2000)
+        for t in query.order_by(model.name, model.id).offset(max(offset, 0)).limit(max(1, min(limit, LABELS_LIMIT)))
     ]
-    if only_unprinted:
-        rows = [r for r in rows if r["printed_at"] is None]
-    return rows
 
 
 class PrintedIn(BaseModel):
@@ -205,7 +207,7 @@ def list_photos(kind: str, tool_id: int, db: Session = Depends(get_db), current_
 
 
 @photos_router.post("/{kind}/{tool_id}", status_code=status.HTTP_201_CREATED)
-def add_photo(kind: str, tool_id: int, file: UploadFile, photo_kind: str = "etat", caption: Optional[str] = None,
+def add_photo(kind: str, tool_id: int, file: UploadFile, request: Request, photo_kind: str = "etat", caption: Optional[str] = None,
               db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _tool_or_error(db, current_user, kind, tool_id)
     if photo_kind not in PHOTO_KINDS:
@@ -216,12 +218,14 @@ def add_photo(kind: str, tool_id: int, file: UploadFile, photo_kind: str = "etat
     photo = ToolPhoto(tool_kind=kind, tool_id=tool_id, path=path, kind=photo_kind,
                       caption=(caption or None) and caption[:300], taken_by_id=current_user.id, created_at=utils.now())
     db.add(photo)
+    db.flush()
+    audit.record(db, "tool_photo_added", current_user.id, "tool_photo", photo.id, request, {"tool_kind": kind, "tool_id": tool_id})
     db.commit()
     return {"id": photo.id, "path": path, "kind": photo.kind}
 
 
 @photos_router.delete("/{photo_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_photo(photo_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_photo(photo_id: int, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     photo = db.query(ToolPhoto).filter_by(id=photo_id).first()
     if photo is None:
         _fail("Photo introuvable", status.HTTP_404_NOT_FOUND)
@@ -229,6 +233,7 @@ def delete_photo(photo_id: int, db: Session = Depends(get_db), current_user: Use
     manager = current_user.role != UserRole.gars_chantier
     if not manager and photo.taken_by_id != current_user.id:
         _fail("Seul l'auteur ou un responsable peut supprimer cette photo", status.HTTP_403_FORBIDDEN)
+    audit.record(db, "tool_photo_deleted", current_user.id, "tool_photo", photo.id, request, {"tool_kind": photo.tool_kind, "tool_id": photo.tool_id})
     db.delete(photo)
     db.commit()
 
@@ -240,7 +245,7 @@ SEARCH_LIMIT = 6
 
 
 def _agency_scope(user: User) -> Optional[str]:
-    return None if user.role == UserRole.admin else user.agency_number
+    return agency_scope(user)
 
 
 @search_router.get("")

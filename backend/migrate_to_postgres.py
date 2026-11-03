@@ -16,7 +16,7 @@ from app import config, database, models, models_ext, models_p2, models_p3, mode
 EXCLUDED = {
     "users", "refresh_tokens", "password_reset_tokens", "login_attempts", "audit_log", "job_runs", "schema_migrations",
     "idempotency_keys", "api_keys", "push_subscriptions", "notifications", "notification_preferences",
-    "assistant_actions", "assistant_messages", "assistant_usage",
+    "assistant_actions", "assistant_messages", "assistant_usage", "rate_events", "charter_acceptances",
 }
 
 

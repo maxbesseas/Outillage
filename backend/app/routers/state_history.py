@@ -1,12 +1,13 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
-from .. import schemas
+from .. import controls, schemas
 from ..auth import get_current_user
 from ..database import get_db
-from ..models import StateHistory, ToolKind, User
+from ..models import PeerTransfer, StateHistory, ToolKind, User, UserRole
 
 router = APIRouter(prefix="/state-history", tags=["state-history"])
 
@@ -25,6 +26,14 @@ def list_state_history(
 ):
     if kind not in VALID_KINDS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Type d'outil invalide")
+    if current_user.role != UserRole.admin:
+        tool = controls.get_tool(db, kind, tool_id)
+        # Une personne qui a participé à un transfert garde l'historique de l'outil, même rendu depuis.
+        party = kind == "personal" and db.query(PeerTransfer).filter(
+            PeerTransfer.tool_id == tool_id, or_(PeerTransfer.from_user_id == current_user.id, PeerTransfer.to_user_id == current_user.id)
+        ).first() is not None
+        if tool is None or not (party or controls.can_access(db, current_user, kind, tool)):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé à cet outil")
 
     query = db.query(StateHistory).filter(StateHistory.tool_kind == kind, StateHistory.tool_id == tool_id)
     response.headers["X-Total-Count"] = str(query.count())

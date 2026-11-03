@@ -11,7 +11,7 @@ from ..database import get_db
 from ..excel_export import sync_new_agency_tool
 from ..hierarchy import visible_user_ids
 from ..history import log_state_change
-from ..models import AgencyTool, AgencyToolStatus, PersonalTool, ToolKind, User
+from ..models import AgencyTool, AgencyToolStatus, PersonalTool, ToolKind, User, UserRole
 from .. import notify
 from ..notifications import notify_magasinier
 from ..utils import save_upload_file
@@ -132,6 +132,8 @@ def create_personal_tool(
 @router.get("/lookup/{code}", response_model=schemas.PersonalToolLookup)
 def lookup_personal_tool(code: str, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     tool = db.query(PersonalTool).filter(PersonalTool.unique_code == code).first()
+    if tool and current_user.role != UserRole.admin and tool.owner.agency_number != current_user.agency_number:
+        tool = None
     if not tool:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Aucun outil trouvé pour ce code")
 
@@ -154,11 +156,15 @@ def get_personal_tool(tool_id: int, db: Session = Depends(get_db), current_user:
 def update_personal_tool(
     tool_id: int,
     payload: schemas.PersonalToolUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     tool = _get_manageable_or_404(db, tool_id, current_user)
     data = payload.model_dump(exclude_unset=True)
+    error = schemas.warranty_error(data.get("purchase_date", tool.purchase_date), data.get("warranty_expiration_date", tool.warranty_expiration_date))
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
 
     old_state = tool.state
     for field, value in data.items():
@@ -170,6 +176,7 @@ def update_personal_tool(
             tool.state_reason.value, tool.state_reason.value,
             current_user.id, "édition",
         )
+    audit.record(db, "personal_tool_updated", current_user.id, "personal_tool", tool.id, request, {"fields": sorted(data)})
 
     db.commit()
     db.refresh(tool)

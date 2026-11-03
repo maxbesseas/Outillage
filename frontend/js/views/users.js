@@ -105,6 +105,20 @@ async function draw(app) {
       }
     });
     const deleteBtn = card.querySelector('[data-action="delete"]');
+    const mfaResetBtn = card.querySelector('[data-action="mfa-reset"]');
+    if (mfaResetBtn) {
+      mfaResetBtn.addEventListener("click", async () => {
+        if (!(await confirmDialog("Réinitialiser la double authentification de ce compte ?", { danger: true }))) return;
+        try {
+          await api.post(`/users/${id}/mfa-reset`);
+          toast("Double authentification réinitialisée", "success");
+          draw(app);
+        } catch (err) {
+          toast(err instanceof ApiError ? err.message : "Erreur", "error");
+        }
+      });
+    }
+
     if (deleteBtn) {
       deleteBtn.addEventListener("click", async () => {
         if (!(await confirmDialog("Supprimer cet utilisateur ?", { danger: true }))) return;
@@ -140,6 +154,7 @@ function userCard(u) {
         ${u.id !== state.user.id ? '<button class="btn btn-sm" data-action="reset">Réinitialiser le mot de passe</button>' : ""}
         ${u.id !== state.user.id ? '<button class="btn btn-sm" data-action="reassign">Réaffecter son matériel</button>' : ""}
         ${u.id !== state.user.id && u.is_active ? '<button class="btn btn-sm" data-action="depart">Départ</button>' : ""}
+        ${isAdmin() && u.totp_enabled ? '<button class="btn btn-sm" data-action="mfa-reset">Réinitialiser la double authentification</button>' : ""}
         ${isAdmin() && u.id !== state.user.id && !u.username.startsWith("anonyme-") ? '<button class="btn btn-sm" data-action="anonymize">Anonymiser (RGPD)</button>' : ""}
         ${isAdmin() && u.id !== state.user.id ? '<button class="btn btn-sm btn-danger" data-action="delete">Supprimer</button>' : ""}
       </div>
@@ -184,7 +199,7 @@ async function openUserForm(user, allUsers, onDone) {
         <input type="text" name="username" value="${escapeHtml(user?.username || "")}" ${isEdit ? "readonly" : "required"}/>
       </div>
       <div class="field">
-        <label>Mot de passe (8 caractères min., une lettre et un chiffre)</label>
+        <label>Mot de passe (12 caractères min., une lettre et un chiffre)</label>
         <input type="password" name="password" autocomplete="new-password" placeholder="${isEdit ? "laisser vide pour ne pas changer" : ""}" ${isEdit ? "" : "required"}/>
       </div>
       <div class="field">

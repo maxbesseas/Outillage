@@ -16,7 +16,7 @@ async function postFile(path, fields) {
 }
 
 export async function renderImports(app) {
-  const [fields, reports] = await Promise.all([api.get("/imports/fields"), api.get("/imports")]);
+  const [fields, reports, excelStatus] = await Promise.all([api.get("/imports/fields"), api.get("/imports"), api.get("/imports/from-excel/status")]);
   if (!wizard) wizard = { target: "agency_tools", file: null, preview: null, mapping: {}, update: false, skipErrors: false, agency: "" };
   const canUsers = !!fields.users;
   const agencies = isAdmin() ? await getAgencies() : [];
@@ -50,9 +50,10 @@ export async function renderImports(app) {
     </div>
     ${mappingHtml}
     <div id="imp-report"></div>
-    <h3>Relire le classeur Excel de l'agence</h3>
+    ${excelStatus.enabled ? `<h3>Relire le classeur Excel de l'agence</h3>
     <p class="card-sub">Met à jour la base à partir du fichier « Inventaire matériel … » posé sur le serveur (nouveaux outils et modifications).</p>
-    <div class="card-actions"><button class="btn btn-sm" id="imp-excel-sim">Simuler</button><button class="btn btn-sm" id="imp-excel-commit">Relire et appliquer</button></div>
+    ${isAdmin() ? `<div class="field"><label for="imp-excel-agency">Agence à relire</label><select id="imp-excel-agency"><option value="">Choisir une agence</option>${agencies.map((a) => `<option value="${escapeHtml(a.name)}">${escapeHtml(a.name)}</option>`).join("")}</select></div>` : ""}
+    <div class="card-actions"><button class="btn btn-sm" id="imp-excel-sim">Simuler</button><button class="btn btn-sm" id="imp-excel-commit">Relire et appliquer</button></div>` : ""}
     <h3>Historique</h3>
     ${reports.map((r) => `<div class="card"><div class="card-row"><div class="card-title">${escapeHtml(TARGET_LABEL[r.target] || r.target)} — ${escapeHtml(r.filename || "")}</div>
       <span class="badge badge-${r.mode === "commit" ? "green" : "gray"}">${r.mode === "commit" ? "Appliqué" : "Simulation"}</span></div>
@@ -106,13 +107,19 @@ export async function renderImports(app) {
 
   const excel = async (mode) => {
     try {
-      showReport(app, await api.post(`/imports/from-excel?mode=${mode}`), mode);
+      const agency = document.getElementById("imp-excel-agency")?.value;
+      if (isAdmin() && !agency) {
+        toast("Choisissez l'agence à relire", "error");
+        return;
+      }
+      const query = new URLSearchParams({ mode, ...(agency ? { agency_number: agency } : {}) });
+      showReport(app, await api.post(`/imports/from-excel?${query}`), mode);
     } catch (err) {
       fail(err);
     }
   };
-  document.getElementById("imp-excel-sim").addEventListener("click", () => excel("simulate"));
-  document.getElementById("imp-excel-commit").addEventListener("click", () => excel("commit"));
+  document.getElementById("imp-excel-sim")?.addEventListener("click", () => excel("simulate"));
+  document.getElementById("imp-excel-commit")?.addEventListener("click", () => excel("commit"));
 }
 
 function showReport(app, r, mode) {

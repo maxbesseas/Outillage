@@ -37,7 +37,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 # Données propres au compte, supprimées avec lui ; le reste de l'historique métier reste rattaché et bloque la suppression.
 ACCOUNT_TABLES = {
     "refresh_tokens", "password_reset_tokens", "notifications", "notification_preferences", "push_subscriptions",
-    "assistant_actions", "assistant_messages", "assistant_usage", "user_qualifications",
+    "assistant_actions", "assistant_messages", "assistant_usage", "user_qualifications", "charter_acceptances",
 }
 
 
@@ -92,9 +92,10 @@ def _holdings(db: Session, user_id: int) -> dict:
     }
 
 
-@router.get("", response_model=list[schemas.UserOut])
+@router.get("", response_model=None)
 def list_users(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return db.query(User).order_by(User.full_name).all()
+    schema = schemas.UserOut if current_user.role == UserRole.admin else schemas.UserDirectoryOut
+    return [schema.model_validate(u) for u in db.query(User).order_by(User.full_name).all()]
 
 
 @router.get("/team", response_model=list[schemas.UserOut])
@@ -200,6 +201,9 @@ def get_user(user_id: int, db: Session = Depends(get_db), current_user: User = D
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur introuvable")
+    ids = visible_user_ids(db, current_user)
+    if ids is not None and user.id not in ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Cet utilisateur n'est pas dans votre équipe")
     return user
 
 
@@ -233,6 +237,8 @@ def update_user(
 
     if "role" in data and data["role"] != user.role:
         revoke = True
+        if data["role"] == UserRole.admin:
+            user.microsoft_tid = user.microsoft_oid = None
     if "email" in data and (data["email"] or "").lower() != (user.email or "").lower():
         user.microsoft_tid = user.microsoft_oid = None
     if data.get("is_active") is False and user.is_active:
@@ -280,6 +286,20 @@ def reset_user_password(
     audit.record(db, "password_reset_by_manager", current_user.id, "user", target.id, request)
     db.commit()
     return {"temporary_password": temporary}
+
+
+@router.post("/{user_id}/mfa-reset", response_model=schemas.UserOut)
+def reset_user_mfa(user_id: int, request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_admin)):
+    """Dépannage d'un salarié qui a perdu son téléphone."""
+    target = db.query(User).filter(User.id == user_id).first()
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Utilisateur introuvable")
+    target.totp_enabled, target.totp_secret, target.totp_last_step = False, None, None
+    invalidate_sessions(db, target)
+    audit.record(db, "mfa_reset_by_admin", current_user.id, "user", target.id, request)
+    db.commit()
+    db.refresh(target)
+    return target
 
 
 @router.post("/{user_id}/reassign-tools")

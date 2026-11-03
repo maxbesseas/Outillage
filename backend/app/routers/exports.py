@@ -2,8 +2,6 @@
 import csv
 import io
 import secrets
-import time
-from collections import defaultdict, deque
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -14,37 +12,28 @@ from openpyxl.styles import Font
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from .. import audit, datasets, utils
+from .. import audit, datasets, limits, utils
+from ..agencies import agency_scope
 from ..auth import get_current_admin, get_current_manager, hash_token
 from ..database import get_db
 from ..models import User, UserRole
 from ..models_p7 import ApiKey
+from ..utils import safe_text
 
 router = APIRouter(prefix="/exports", tags=["exports"])
 keys_router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 reports_router = APIRouter(prefix="/reports", tags=["rapports"])
 
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-DANGEROUS_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 RATE_LIMIT_PER_MINUTE = 60
-_hits = defaultdict(deque)
 
 
 def _fail(message: str, code: int = status.HTTP_400_BAD_REQUEST):
     raise HTTPException(status_code=code, detail=message)
 
 
-def safe_text(value):
-    """Neutralise l'injection de formules (=, +, -, @) à l'ouverture dans un tableur."""
-    if isinstance(value, str) and value.startswith(DANGEROUS_PREFIXES):
-        return "'" + value
-    return value
-
-
 def _scope(user: User, requested: Optional[str]) -> Optional[str]:
-    if user.role == UserRole.admin:
-        return requested or None
-    return user.agency_number
+    return agency_scope(user, requested)
 
 
 def _csv_cell(value):
@@ -182,14 +171,9 @@ def get_api_key(x_api_key: Optional[str] = Header(default=None), db: Session = D
     row = db.query(ApiKey).filter(ApiKey.key_hash == hash_token(x_api_key)).first()
     if row is None or not row.is_active or row.revoked_at is not None or (row.expires_at and row.expires_at < utils.now()):
         raise invalid
-    now = time.monotonic()
-    window = _hits[row.id]
-    while window and now - window[0] > 60:
-        window.popleft()
-    if len(window) >= RATE_LIMIT_PER_MINUTE:
+    if not limits.allow(db, f"apikey:{row.id}", RATE_LIMIT_PER_MINUTE, 60):
         raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="Trop de requêtes, réessayez dans une minute",
                             headers={"Retry-After": "60"})
-    window.append(now)
     row.last_used_at = utils.now()
     db.commit()
     return row
@@ -201,12 +185,14 @@ def list_reports(key: ApiKey = Depends(get_api_key)):
 
 
 @reports_router.get("/{name}")
-def read_report(name: str, response: Response, limit: int = 1000, offset: int = 0, key: ApiKey = Depends(get_api_key),
+def read_report(name: str, request: Request, response: Response, limit: int = 1000, offset: int = 0, key: ApiKey = Depends(get_api_key),
                 db: Session = Depends(get_db)):
     if name not in datasets.DATASETS:
         _fail("Jeu de données inconnu", status.HTTP_404_NOT_FOUND)
     _, fn = datasets.DATASETS[name]
     _, rows = fn(db, key.agency_number)
+    audit.record(db, "report_read", key.created_by_id, "api_key", key.id, request, {"dataset": name, "rows": len(rows)})
+    db.commit()
     response.headers["X-Total-Count"] = str(len(rows))
     offset, limit = max(offset, 0), max(1, min(limit, 5000))
     return rows[offset: offset + limit]

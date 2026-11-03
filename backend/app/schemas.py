@@ -1,7 +1,8 @@
+import re
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import Annotated, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from .models import (
     AgencyLossReason,
@@ -16,6 +17,43 @@ from .models import (
 
 
 EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+MAX_AMOUNT = 100_000_000.0
+MIN_DATE = datetime(1990, 1, 1)
+MAX_DATE = datetime(2100, 1, 1)
+
+
+def _sane_date(value: datetime) -> datetime:
+    if not MIN_DATE <= value.replace(tzinfo=None) <= MAX_DATE:
+        raise ValueError("date hors des limites acceptées")
+    return value
+
+
+SaneDate = Annotated[datetime, AfterValidator(_sane_date)]
+ToolName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=160)]
+ToolCode = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=60)]
+ShortText = Annotated[str, StringConstraints(strip_whitespace=True, max_length=80)]
+LongText = Annotated[str, StringConstraints(max_length=2000)]
+Amount = Annotated[float, Field(ge=0, le=MAX_AMOUNT)]
+
+
+def warranty_error(purchase: Optional[datetime], warranty: Optional[datetime]) -> Optional[str]:
+    if purchase and warranty and warranty.replace(tzinfo=None) < purchase.replace(tzinfo=None):
+        return "La fin de garantie ne peut pas précéder la date d'achat"
+    return None
+
+
+class _ToolChecks(BaseModel):
+    """Contrôles communs aux outils et EPI, à la création comme à la modification."""
+
+    @model_validator(mode="after")
+    def _check_tool(self):
+        for field in ("name", "unique_code"):
+            if field in self.model_fields_set and getattr(self, field, None) is None:
+                raise ValueError(f"{field} est obligatoire")
+        error = warranty_error(getattr(self, "purchase_date", None), getattr(self, "warranty_expiration_date", None))
+        if error:
+            raise ValueError(error)
+        return self
 
 
 # ---------- Auth ----------
@@ -28,12 +66,12 @@ class Token(BaseModel):
 
 
 class RefreshRequest(BaseModel):
-    refresh_token: str
+    refresh_token: str = Field(max_length=500)
 
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str
-    new_password: str
+    current_password: str = Field(max_length=1000)
+    new_password: str = Field(max_length=1000)
 
 
 class ForgotPasswordRequest(BaseModel):
@@ -41,18 +79,20 @@ class ForgotPasswordRequest(BaseModel):
 
 
 class ResetPasswordRequest(BaseModel):
-    token: str
-    new_password: str
+    token: str = Field(max_length=500)
+    new_password: str = Field(max_length=1000)
 
 
 class ProfileUpdate(BaseModel):
     email: Optional[str] = Field(default=None, pattern=EMAIL_PATTERN)
     phone: Optional[str] = Field(default=None, max_length=30)
+    current_password: Optional[str] = Field(default=None, max_length=1000)
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(max_length=150)
+    password: str = Field(max_length=1000)
+    otp: Optional[str] = Field(default=None, max_length=12)
 
 
 # ---------- Users ----------
@@ -95,7 +135,21 @@ class UserOut(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     must_change_password: bool = False
+    totp_enabled: bool = False
+    charter_version: int = 0
     created_at: datetime
+
+
+class UserDirectoryOut(BaseModel):
+    """Annuaire visible par tous : ni identifiant de connexion ni coordonnées."""
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    full_name: str
+    role: UserRole
+    manager_id: Optional[int] = None
+    agency_number: Optional[str] = None
+    is_active: bool
 
 
 Token.model_rebuild()
@@ -162,16 +216,16 @@ class JobOut(BaseModel):
 
 # ---------- Personal tools ----------
 
-class PersonalToolBase(BaseModel):
-    name: str
-    type: Optional[str] = None
-    brand: Optional[str] = None
-    model: Optional[str] = None
-    unique_code: str
-    purchase_date: Optional[datetime] = None
-    purchase_price: Optional[float] = Field(default=None, ge=0)
-    warranty_expiration_date: Optional[datetime] = None
-    last_control_date: Optional[datetime] = None
+class PersonalToolBase(_ToolChecks):
+    name: ToolName
+    type: Optional[ShortText] = None
+    brand: Optional[ShortText] = None
+    model: Optional[ShortText] = None
+    unique_code: ToolCode
+    purchase_date: Optional[SaneDate] = None
+    purchase_price: Optional[Amount] = None
+    warranty_expiration_date: Optional[SaneDate] = None
+    last_control_date: Optional[SaneDate] = None
     state: int = Field(default=5, ge=0, le=5)
 
 
@@ -179,23 +233,23 @@ class PersonalToolCreate(PersonalToolBase):
     pass
 
 
-class PersonalToolUpdate(BaseModel):
-    name: Optional[str] = None
-    type: Optional[str] = None
-    brand: Optional[str] = None
-    model: Optional[str] = None
-    unique_code: Optional[str] = None
-    purchase_date: Optional[datetime] = None
-    purchase_price: Optional[float] = Field(default=None, ge=0)
-    warranty_expiration_date: Optional[datetime] = None
-    last_control_date: Optional[datetime] = None
+class PersonalToolUpdate(_ToolChecks):
+    name: Optional[ToolName] = None
+    type: Optional[ShortText] = None
+    brand: Optional[ShortText] = None
+    model: Optional[ShortText] = None
+    unique_code: Optional[ToolCode] = None
+    purchase_date: Optional[SaneDate] = None
+    purchase_price: Optional[Amount] = None
+    warranty_expiration_date: Optional[SaneDate] = None
+    last_control_date: Optional[SaneDate] = None
     state: Optional[int] = Field(default=None, ge=0, le=5)
 
 
 class PersonalToolStateUpdate(BaseModel):
     state: int = Field(ge=0, le=5)
     state_reason: ToolStateReason = ToolStateReason.normal
-    state_comment: Optional[str] = None
+    state_comment: Optional[LongText] = None
 
 
 class PersonalToolOut(BaseModel):
@@ -235,18 +289,18 @@ class PersonalToolLookup(BaseModel):
 
 # ---------- Agency tools ----------
 
-class AgencyToolBase(BaseModel):
-    name: str
-    type: Optional[str] = None
-    brand: Optional[str] = None
-    unique_code: str
-    description: Optional[str] = None
-    serial_number: Optional[str] = None
-    purchase_date: Optional[datetime] = None
-    purchase_price: float = Field(default=0.0, ge=0)
-    daily_rate: Optional[float] = Field(default=None, ge=0)
-    warranty_expiration_date: Optional[datetime] = None
-    comment: Optional[str] = None
+class AgencyToolBase(_ToolChecks):
+    name: ToolName
+    type: Optional[ShortText] = None
+    brand: Optional[ShortText] = None
+    unique_code: ToolCode
+    description: Optional[LongText] = None
+    serial_number: Optional[ShortText] = None
+    purchase_date: Optional[SaneDate] = None
+    purchase_price: Amount = 0.0
+    daily_rate: Optional[Amount] = None
+    warranty_expiration_date: Optional[SaneDate] = None
+    comment: Optional[LongText] = None
     state: int = Field(default=5, ge=0, le=5)
     agency_number: Optional[str] = None
 
@@ -255,33 +309,33 @@ class AgencyToolCreate(AgencyToolBase):
     pass
 
 
-class AgencyToolUpdate(BaseModel):
-    name: Optional[str] = None
-    type: Optional[str] = None
-    brand: Optional[str] = None
-    unique_code: Optional[str] = None
-    description: Optional[str] = None
-    serial_number: Optional[str] = None
-    purchase_date: Optional[datetime] = None
-    purchase_price: Optional[float] = Field(default=None, ge=0)
-    warranty_expiration_date: Optional[datetime] = None
-    comment: Optional[str] = None
+class AgencyToolUpdate(_ToolChecks):
+    name: Optional[ToolName] = None
+    type: Optional[ShortText] = None
+    brand: Optional[ShortText] = None
+    unique_code: Optional[ToolCode] = None
+    description: Optional[LongText] = None
+    serial_number: Optional[ShortText] = None
+    purchase_date: Optional[SaneDate] = None
+    purchase_price: Optional[Amount] = None
+    warranty_expiration_date: Optional[SaneDate] = None
+    comment: Optional[LongText] = None
     state: Optional[int] = Field(default=None, ge=0, le=5)
     status: Optional[AgencyToolStatus] = None
     loss_reason: Optional[AgencyLossReason] = None
     assigned_to_id: Optional[int] = None
-    last_control_date: Optional[datetime] = None
+    last_control_date: Optional[SaneDate] = None
     parent_tool_id: Optional[int] = None
-    daily_rate: Optional[float] = Field(default=None, ge=0)
+    daily_rate: Optional[Amount] = None
 
 
 class AgencyToolControlUpdate(BaseModel):
     state: int = Field(ge=0, le=5)
     status: AgencyToolStatus
     loss_reason: Optional[AgencyLossReason] = None
-    comment: Optional[str] = None
-    serial_number: Optional[str] = None
-    description: Optional[str] = None
+    comment: Optional[LongText] = None
+    serial_number: Optional[ShortText] = None
+    description: Optional[LongText] = None
 
 
 class AgencyToolOut(BaseModel):
@@ -374,19 +428,32 @@ class LoanOut(BaseModel):
 
 # ---------- Transfers ----------
 
-class TransferCreate(BaseModel):
+class TransferFields(BaseModel):
+    to_external_name: str = Field(max_length=120)
+    to_external_type: ExternalRecipientType = ExternalRecipientType.autre
+    to_external_company: Optional[str] = Field(default=None, max_length=120)
+    site_code: Optional[str] = Field(default=None, max_length=40)
+    client_code: Optional[str] = Field(default=None, max_length=40)
+    attached_to_id: Optional[int] = None
+    planned_return_date: Optional[SaneDate] = None
+    comment: Optional[LongText] = None
+    to_external_email: Optional[str] = Field(default=None, max_length=120)
+    to_external_phone: Optional[str] = Field(default=None, max_length=30)
+
+    @field_validator("to_external_email")
+    @classmethod
+    def _valid_email(cls, value: Optional[str]) -> Optional[str]:
+        value = (value or "").strip()
+        if not value:
+            return None
+        if not re.fullmatch(EMAIL_PATTERN, value):
+            raise ValueError("adresse e-mail invalide")
+        return value
+
+
+class TransferCreate(TransferFields):
     tool_id: Optional[int] = None
     agency_tool_id: Optional[int] = None
-    to_external_name: str
-    to_external_type: ExternalRecipientType = ExternalRecipientType.autre
-    to_external_company: Optional[str] = None
-    site_code: Optional[str] = None
-    client_code: Optional[str] = None
-    attached_to_id: Optional[int] = None
-    planned_return_date: Optional[datetime] = None
-    comment: Optional[str] = None
-    to_external_email: Optional[str] = None
-    to_external_phone: Optional[str] = None
 
 
 class TransferReturn(BaseModel):
@@ -476,14 +543,14 @@ class SettingsOut(BaseModel):
 
 # ---------- Epi ----------
 
-class EpiBase(BaseModel):
-    name: str
-    type: Optional[str] = None
-    brand: Optional[str] = None
-    unique_code: str
-    expiration_date: Optional[datetime] = None
+class EpiBase(_ToolChecks):
+    name: ToolName
+    type: Optional[ShortText] = None
+    brand: Optional[ShortText] = None
+    unique_code: ToolCode
+    expiration_date: Optional[SaneDate] = None
     state: int = Field(default=5, ge=0, le=5)
-    comment: Optional[str] = None
+    comment: Optional[LongText] = None
     assigned_to_id: Optional[int] = None
     agency_number: Optional[str] = None
 
@@ -492,21 +559,21 @@ class EpiCreate(EpiBase):
     pass
 
 
-class EpiUpdate(BaseModel):
-    name: Optional[str] = None
-    type: Optional[str] = None
-    brand: Optional[str] = None
-    unique_code: Optional[str] = None
-    expiration_date: Optional[datetime] = None
+class EpiUpdate(_ToolChecks):
+    name: Optional[ToolName] = None
+    type: Optional[ShortText] = None
+    brand: Optional[ShortText] = None
+    unique_code: Optional[ToolCode] = None
+    expiration_date: Optional[SaneDate] = None
     state: Optional[int] = Field(default=None, ge=0, le=5)
-    comment: Optional[str] = None
+    comment: Optional[LongText] = None
     assigned_to_id: Optional[int] = None
-    last_control_date: Optional[datetime] = None
+    last_control_date: Optional[SaneDate] = None
 
 
 class EpiControlUpdate(BaseModel):
     state: int = Field(ge=0, le=5)
-    comment: Optional[str] = None
+    comment: Optional[LongText] = None
 
 
 class EpiOut(BaseModel):

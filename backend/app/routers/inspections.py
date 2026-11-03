@@ -301,6 +301,10 @@ def create_inspection(payload: InspectionIn, db: Session = Depends(get_db), curr
     tool = _tool_or_error(db, current_user, payload.tool_kind, payload.tool_id)
     if payload.result is not None and payload.result not in RESULTS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Résultat invalide")
+    if payload.tool_kind == "agency" and payload.status:
+        refusal = controls.status_change_error(current_user, tool.status.value, payload.status)
+        if refusal:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=refusal)
     try:
         inspection = controls.record_inspection(
             db, payload.tool_kind, tool, current_user, payload.state_after, payload.comment,
@@ -353,7 +357,7 @@ def upload_inspection_report(inspection_id: int, file: UploadFile, db: Session =
 
 
 @router.get("/registry")
-def export_registry(tool_kind: str, tool_id: Optional[int] = None, type: Optional[str] = None,
+def export_registry(tool_kind: str, request: Request, tool_id: Optional[int] = None, type: Optional[str] = None,
                     format: str = "xlsx", db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     _valid_kind(tool_kind)
     model = controls.MODELS[tool_kind]
@@ -374,6 +378,8 @@ def export_registry(tool_kind: str, tool_id: Optional[int] = None, type: Optiona
         )
         for i in inspections:
             rows.append((tool, i))
+    audit.record(db, "export_registry", current_user.id, "export", None, request, {"tool_kind": tool_kind, "tool_id": tool_id, "format": format, "rows": len(rows)})
+    db.commit()
     if format == "pdf":
         pdf = Pdf("Registre de vérification")
         pdf.heading("Registre de vérification")
@@ -396,13 +402,13 @@ def export_registry(tool_kind: str, tool_id: Optional[int] = None, type: Optiona
     ws.append(["Code", "Élément", "Type", "Date du contrôle", "Résultat", "Contrôleur", "État constaté", "Prochain contrôle", "Commentaire", "Points de contrôle"])
     for tool, i in rows:
         points = "; ".join(f"{c['label']}: {c['answer']}" for c in (json.loads(i.checklist_json) if i.checklist_json else []))
-        ws.append([tool.unique_code, tool.name, tool.type, i.inspected_at, i.result, names.get(i.inspector_id), i.state_after, i.next_due, i.comment, points])
+        ws.append([utils.safe_text(v) for v in (tool.unique_code, tool.name, tool.type, i.inspected_at, i.result, names.get(i.inspector_id), i.state_after, i.next_due, i.comment, points)])
     if tool_kind == "agency":
         cal = wb.create_sheet("Étalonnages")
         cal.append(["Code", "Instrument", "Date", "Prochaine échéance", "Prestataire", "N° certificat", "Résultat", "Coût"])
         for tool in tools:
             for c in db.query(Calibration).filter(Calibration.tool_id == tool.id).order_by(Calibration.calibrated_at):
-                cal.append([tool.unique_code, tool.name, c.calibrated_at, c.next_due, c.provider, c.certificate_number, c.result, c.cost])
+                cal.append([utils.safe_text(v) for v in (tool.unique_code, tool.name, c.calibrated_at, c.next_due, c.provider, c.certificate_number, c.result, c.cost)])
     buffer = io.BytesIO()
     wb.save(buffer)
     buffer.seek(0)

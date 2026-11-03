@@ -52,7 +52,7 @@ async function openSiteForm(site, onDone) {
     <form id="s-form" class="form-grid">
       ${agencies.length ? `<div class="field"><label>Agence</label><select name="agency_number">${agencies.map((a) => `<option value="${escapeHtml(a.name)}">${escapeHtml(a.name)}</option>`).join("")}</select></div>` : ""}
       <div class="field"><label>Nom</label><input name="name" required value="${escapeHtml(site?.name || "")}"/></div>
-      <div class="field-row"><div class="field"><label>Code</label><input name="code" value="${escapeHtml(site?.code || "")}"/></div>
+      <div class="field-row"><div class="field"><label>Code (6 chiffres)</label><input name="code" inputmode="numeric" placeholder="250214" value="${escapeHtml(site?.code || "")}"/></div>
         <div class="field"><label>Client</label><input name="client" value="${escapeHtml(site?.client || "")}"/></div></div>
       <div class="field"><label>Adresse</label><input name="address" value="${escapeHtml(site?.address || "")}"/></div>
       <div class="field-row"><div class="field"><label>Début</label><input type="date" name="start" value="${site?.start_date ? site.start_date.slice(0, 10) : ""}"/></div>

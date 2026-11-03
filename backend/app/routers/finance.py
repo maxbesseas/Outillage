@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from .. import audit, finance, utils
+from ..agencies import agency_scope
 from ..auth import get_current_admin, get_current_manager
 from ..database import get_db
 from ..models import AgencyTool, AgencyToolStatus, User, UserRole
@@ -26,9 +27,7 @@ def _fail(message: str, code: int = status.HTTP_400_BAD_REQUEST):
 
 
 def scope_agency(user: User, requested: Optional[str] = None) -> Optional[str]:
-    if user.role == UserRole.admin:
-        return requested or None
-    return user.agency_number
+    return agency_scope(user, requested)
 
 
 # ------------------------------------------------------------------ amortissement

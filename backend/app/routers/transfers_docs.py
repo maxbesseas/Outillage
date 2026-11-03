@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from .. import documents, schemas, utils
+from .. import documents, limits, schemas, utils
 from ..auth import get_current_user
 from ..database import get_db
 from ..hierarchy import visible_user_ids
@@ -14,6 +14,8 @@ from ..notifications import send_email
 from .transfers import _create_transfer_core
 
 router = APIRouter(prefix="/transfers", tags=["transfers"])
+
+MAILS_PER_HOUR = 20
 
 
 class SignatureIn(BaseModel):
@@ -25,19 +27,9 @@ class EmailIn(BaseModel):
     to: str = Field(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
-class BatchTransferIn(BaseModel):
+class BatchTransferIn(schemas.TransferFields):
     tool_ids: List[int] = []
     agency_tool_ids: List[int] = []
-    to_external_name: str
-    to_external_type: schemas.ExternalRecipientType = schemas.ExternalRecipientType.autre
-    to_external_company: Optional[str] = None
-    to_external_email: Optional[str] = None
-    to_external_phone: Optional[str] = None
-    site_code: Optional[str] = None
-    client_code: Optional[str] = None
-    attached_to_id: Optional[int] = None
-    planned_return_date: Optional[schemas.datetime] = None
-    comment: Optional[str] = None
 
 
 def _fail(message: str, code: int = status.HTTP_400_BAD_REQUEST):
@@ -114,6 +106,9 @@ def discharge_pdf(transfer_id: int, db: Session = Depends(get_db), current_user:
 def email_discharge(transfer_id: int, payload: EmailIn, response: Response, db: Session = Depends(get_db),
                     current_user: User = Depends(get_current_user)):
     transfer = _transfer_or_404(db, current_user, transfer_id)
+    if not limits.allow(db, f"mail:{current_user.id}", MAILS_PER_HOUR, 3600):
+        _fail("Trop d'envois d'e-mails, réessayez plus tard", status.HTTP_429_TOO_MANY_REQUESTS)
+    db.commit()
     tool, _ = _tool_and_kind(db, transfer)
     ok, message = send_email(
         db, payload.to, f"Décharge de responsabilité n°{transfer.id} — {tool.name}",

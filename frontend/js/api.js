@@ -90,6 +90,11 @@ async function authFetch(path, options = {}, retried = false) {
     throw new ApiError("Vous devez changer votre mot de passe avant de continuer", 403);
   }
 
+  if (res.status === 403 && res.headers.get("X-Auth-Error") === "charter_required") {
+    navigate("/charte");
+    throw new ApiError("Vous devez accepter la charte avant de continuer", 403);
+  }
+
   return res;
 }
 
@@ -104,6 +109,19 @@ async function parseBody(res) {
   }
 }
 
+const FIELD_LABELS = {
+  name: "le nom", unique_code: "le code", purchase_price: "le prix d'achat", daily_rate: "le tarif journalier", purchase_date: "la date d'achat",
+  warranty_expiration_date: "la fin de garantie", expiration_date: "la date de péremption", last_control_date: "la date de contrôle",
+  to_external_name: "le destinataire", to_external_email: "l'e-mail du destinataire", to_external_phone: "le téléphone du destinataire",
+  planned_return_date: "la date de retour", start_datetime: "la date de début", end_datetime_planned: "la date de fin", comment: "le commentaire",
+  description: "la description", email: "l'e-mail", phone: "le téléphone", quantity: "la quantité", code: "le code",
+};
+
+function validationMessage(detail) {
+  const fields = [...new Set(detail.map((d) => FIELD_LABELS[d.loc?.[d.loc.length - 1]]).filter(Boolean))];
+  return fields.length ? `Vérifiez ${fields.join(", ")}` : "Données invalides";
+}
+
 async function request(path, options = {}) {
   const res = await authFetch(path, options);
   checkSyncHeaders(res);
@@ -111,7 +129,7 @@ async function request(path, options = {}) {
   const data = await parseBody(res);
   if (!res.ok) {
     const detail = data && data.detail;
-    const message = typeof detail === "string" ? detail : Array.isArray(detail) ? "Données invalides" : `Erreur ${res.status}`;
+    const message = typeof detail === "string" ? detail : Array.isArray(detail) ? validationMessage(detail) : `Erreur ${res.status}`;
     throw new ApiError(message, res.status);
   }
   return data;

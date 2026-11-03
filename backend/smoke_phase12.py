@@ -60,7 +60,7 @@ try:
 except _HE12 as exc:
     _refused12 = exc.status_code == 400
 check("an oversized photo is refused", _refused12)
-_small12 = _ut12.save_upload_file(_UF12(file=_io12.BytesIO(b"petite"), filename="petite.png"), "test12")
+_small12 = _ut12.save_upload_file(_UF12(file=_io12.BytesIO(b"\x89PNG\r\n\x1a\npetite"), filename="petite.png"), "test12")
 check("a normal photo is still saved", _small12.startswith("/uploads/test12/") and _small12.endswith(".png"))
 
 import jwt as _jwt12

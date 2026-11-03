@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta
 import shutil
 import tempfile
 from pathlib import Path
@@ -71,6 +72,13 @@ def pdt(value):
 def auth(token):
     return {"Authorization": f"Bearer {token}"}
 
+
+# Les anciens scénarios fabriquent des retards par l'API : les règles sur le passé sont réactivées et testées dans smoke_security.py.
+from app import reservations as _res_setup
+from app.routers import transfers as _transfers_setup
+
+_res_setup.PAST_TOLERANCE = timedelta(days=36500)
+_transfers_setup.PAST_RETURN_TOLERANCE = timedelta(days=36500)
 
 admin_token = login("admin", "admin123")
 
@@ -210,13 +218,13 @@ check("cross-agency control blocked", r.status_code == 403)
 
 # --- Loans scoping + overlap ---
 r = client.post("/loans", json={
-    "tool_id": agy101_tool_id, "start_datetime": "2026-01-01T08:00:00", "end_datetime_planned": "2026-01-01T10:00:00",
+    "tool_id": agy101_tool_id, "start_datetime": datetime.utcnow().isoformat(), "end_datetime_planned": (datetime.utcnow() + timedelta(hours=2)).isoformat(),
 }, headers=auth(gars101a_token))
 check("create loan", r.status_code == 201)
 loan_id = r.json()["id"]
 
 r = client.post("/loans", json={
-    "tool_id": agy101_tool_id, "start_datetime": "2026-01-01T09:00:00", "end_datetime_planned": "2026-01-01T11:00:00",
+    "tool_id": agy101_tool_id, "start_datetime": (datetime.utcnow() + timedelta(hours=1)).isoformat(), "end_datetime_planned": (datetime.utcnow() + timedelta(hours=3)).isoformat(),
 }, headers=auth(login("gars101b")))
 check("overlapping loan rejected", r.status_code == 400)
 
@@ -371,6 +379,7 @@ exec(compile(Path(__file__).with_name("smoke_phase9.py").read_text(encoding="utf
 exec(compile(Path(__file__).with_name("smoke_phase11.py").read_text(encoding="utf-8"), "smoke_phase11.py", "exec"), globals())
 exec(compile(Path(__file__).with_name("smoke_phase12.py").read_text(encoding="utf-8"), "smoke_phase12.py", "exec"), globals())
 exec(compile(Path(__file__).with_name("smoke_microsoft.py").read_text(encoding="utf-8"), "smoke_microsoft.py", "exec"), globals())
+exec(compile(Path(__file__).with_name("smoke_security.py").read_text(encoding="utf-8"), "smoke_security.py", "exec"), globals())
 
 
 

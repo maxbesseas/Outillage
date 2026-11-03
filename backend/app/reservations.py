@@ -18,6 +18,9 @@ UNAVAILABLE = (
     AgencyToolStatus.sorti_du_parc,
 )
 MAX_SERIES = 60
+PAST_TOLERANCE = timedelta(hours=1)
+MAX_AHEAD = timedelta(days=730)
+ABSOLUTE_MAX_DAYS = 365
 
 
 class ReservationError(Exception):
@@ -105,7 +108,17 @@ def check_slot(db: Session, tool: AgencyTool, start: datetime, end: datetime, ex
         raise ReservationError(f"Outil indisponible sur ce créneau ({blackout.reason})")
 
 
+def check_dates(actor: User, start: datetime, end: datetime, now: datetime):
+    """Le passé reste ouvert à l'administrateur, pour régulariser un oubli."""
+    if actor.role != UserRole.admin and start < now - PAST_TOLERANCE:
+        raise ReservationError("La date de début est déjà passée")
+    if start > now + MAX_AHEAD:
+        raise ReservationError("La réservation est trop éloignée dans le temps (2 ans maximum)")
+
+
 def check_duration(db: Session, tool: AgencyTool, start: datetime, end: datetime):
+    if (end - start) > timedelta(days=ABSOLUTE_MAX_DAYS):
+        raise ReservationError(f"Durée trop longue : {ABSOLUTE_MAX_DAYS} jours maximum")
     max_days = rules_for(db, tool)["max_days"]
     if max_days and (end - start) > timedelta(days=max_days):
         raise ReservationError(f"Durée maximale de réservation dépassée ({max_days} jour(s) pour ce type d'outil)")
@@ -155,6 +168,7 @@ def create_loan(
     now = now or utils.now()
     if end <= start:
         raise ReservationError("La date de fin doit être après la date de début")
+    check_dates(actor, start, end, now)
     if tool.status in UNAVAILABLE:
         raise ReservationError("Cet outil n'est pas disponible")
     immediate = start <= now + IMMEDIATE_TOLERANCE

@@ -156,6 +156,19 @@ def m008_microsoft_login(conn: Connection):
         conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ux_users_microsoft ON users (microsoft_tid, microsoft_oid)"))
 
 
+def m009_rate_events(conn: Connection):
+    if not _table_exists(conn, "rate_events"):
+        conn.execute(text(_ddl(conn, "CREATE TABLE rate_events (id INTEGER PRIMARY KEY, key VARCHAR(200) NOT NULL, amount INTEGER NOT NULL DEFAULT 1, created_at DATETIME NOT NULL)").replace("id INTEGER PRIMARY KEY", "id SERIAL PRIMARY KEY" if conn.dialect.name == "postgresql" else "id INTEGER PRIMARY KEY")))
+    create_index_if_missing(conn, "ix_rate_events_key_created", "rate_events", "key, created_at")
+
+
+def m010_mfa_and_charter(conn: Connection):
+    add_column_if_missing(conn, "users", "totp_secret", "VARCHAR")
+    add_column_if_missing(conn, "users", "totp_enabled", "BOOLEAN NOT NULL DEFAULT 0")
+    add_column_if_missing(conn, "users", "totp_last_step", "INTEGER")
+    add_column_if_missing(conn, "users", "charter_version", "INTEGER NOT NULL DEFAULT 0")
+
+
 MIGRATIONS: List[Tuple[int, str, Callable[[Connection], None]]] = [
     (1, "users: email, phone, must_change_password, token_version", m001_users_accounts),
     (2, "index de performance", m002_indexes),
@@ -165,6 +178,8 @@ MIGRATIONS: List[Tuple[int, str, Callable[[Connection], None]]] = [
     (6, "outils d'agence : sortie de parc et composition", m006_agency_tools_phase5),
     (7, "chantiers : table sites, rattachement des réservations et du stock, tarif journalier", m007_sites),
     (8, "connexion Microsoft : identité liée au compte", m008_microsoft_login),
+    (9, "compteurs anti-abus partagés", m009_rate_events),
+    (10, "double authentification et acceptation de la charte", m010_mfa_and_charter),
 ]
 
 

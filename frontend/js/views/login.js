@@ -75,6 +75,10 @@ export async function renderLogin(app, { query } = {}) {
               <label for="login-password">Mot de passe</label>
               <input id="login-password" type="password" name="password" autocomplete="current-password" required/>
             </div>
+            <div class="field" id="login-otp-field" hidden>
+              <label for="login-otp">Code de vérification (application d'authentification)</label>
+              <input id="login-otp" type="text" name="otp" inputmode="numeric" autocomplete="one-time-code" maxlength="6"/>
+            </div>
             <button type="submit" class="btn btn-primary btn-block" id="login-submit">Se connecter</button>
             <a href="#/mot-de-passe-oublie" class="login-link">Mot de passe oublié ?</a>
           </form>
@@ -94,12 +98,17 @@ export async function renderLogin(app, { query } = {}) {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const data = Object.fromEntries(new FormData(form).entries());
+    if (!data.otp) delete data.otp;
     submitBtn.disabled = true;
     try {
       const res = await api.post("/auth/login", data);
       setSession(res.access_token, res.user, res.refresh_token);
       navigate("/");
     } catch (err) {
+      if (err instanceof ApiError && err.message === "Saisissez le code de vérification") {
+        document.getElementById("login-otp-field").hidden = false;
+        document.getElementById("login-otp").focus();
+      }
       toast(err instanceof ApiError ? err.message : "Erreur de connexion", "error");
     } finally {
       submitBtn.disabled = false;

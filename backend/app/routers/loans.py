@@ -8,7 +8,7 @@ from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from .. import appsettings, controls, documents, ics, notify, reservations, utils
+from .. import appsettings, controls, documents, ics, limits, notify, reservations, utils
 from .. import sites as sites_mod
 from ..auth import get_current_user
 from ..database import get_db
@@ -23,6 +23,7 @@ from ..utils import save_upload_file
 router = APIRouter(prefix="/loans", tags=["loans"])
 
 ACTIVE_STATUSES = (LoanStatus.reserve, LoanStatus.en_cours)  # rétrocompatibilité
+MAILS_PER_HOUR = 20
 
 
 # ------------------------------------------------------------------ schémas
@@ -490,6 +491,8 @@ def modify_loan(loan_id: int, payload: ModifyIn, db: Session = Depends(get_db),
             _fail("La date de fin doit être après la date de début")
         try:
             if "start_datetime" in data or "end_datetime_planned" in data:
+                if "start_datetime" in data:
+                    reservations.check_dates(current_user, new_start, new_end, utils.now())
                 reservations.check_slot(db, tool, new_start, new_end, exclude_ids=[loan.id])
                 reservations.check_duration(db, tool, new_start, new_end)
         except ReservationError as exc:
@@ -706,6 +709,9 @@ def email_voucher(loan_id: int, payload: EmailIn, response: Response, db: Sessio
                   current_user: User = Depends(get_current_user)):
     loan = _loan_or_404(db, loan_id)
     _ensure_manage(db, current_user, loan)
+    if not limits.allow(db, f"mail:{current_user.id}", MAILS_PER_HOUR, 3600):
+        _fail("Trop d'envois d'e-mails, réessayez plus tard", status.HTTP_429_TOO_MANY_REQUESTS)
+    db.commit()
     tool = _tool_of(db, loan)
     ok, message = send_email(
         db, payload.to, f"Bon de sortie n°{loan.id} — {tool.name}",

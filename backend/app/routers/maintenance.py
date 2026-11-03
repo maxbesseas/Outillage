@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from .. import audit, controls, maintenance, notify, reservations, utils
 from .. import excel_export
 from .. import finance as finance_mod
-from ..agencies import registry_name_for
+from ..agencies import agency_scope, check_same_agency, registry_name_for
 from ..auth import get_current_manager, get_current_user
 from ..database import get_db
 from ..history import log_state_change
@@ -219,7 +219,7 @@ def list_tickets(
 
 @tickets_router.get("/stats")
 def ticket_stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_manager)):
-    return maintenance.stats(db, None if current_user.role == UserRole.admin else current_user.agency_number)
+    return maintenance.stats(db, agency_scope(current_user))
 
 
 @tickets_router.get("/{ticket_id}")
@@ -237,6 +237,7 @@ def update_ticket(ticket_id: int, payload: TicketPatch, db: Session = Depends(ge
         _fail("Prestataire invalide")
     if "severity" in data and data["severity"] not in maintenance.SEVERITIES:
         _fail("Gravité invalide")
+    check_same_agency(db, current_user, data.get("assigned_to_id"), ticket.agency_number)
     for key, value in data.items():
         setattr(ticket, key, value)
     if "expected_return_date" in data:
@@ -527,6 +528,7 @@ def add_movement(item_id: int, payload: MovementIn, db: Session = Depends(get_db
     item = _stock_item(db, current_user, item_id)
     if payload.kind not in ("entree", "sortie", "inventaire"):
         _fail("Type de mouvement invalide")
+    check_same_agency(db, current_user, payload.to_user_id, item.agency_number)
     before = item.quantity
     if payload.kind == "entree":
         if payload.quantity <= 0:

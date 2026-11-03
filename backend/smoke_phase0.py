@@ -235,7 +235,7 @@ check("new password accepted after reset", raw_login("mailuser", "reset12345").s
 # ---------- Profil ----------
 r = client.patch("/auth/me", json={"email": "pas-un-email"}, headers=auth(gars101a_token))
 check("profile rejects an invalid email", r.status_code == 422)
-r = client.patch("/auth/me", json={"email": "gars@example.com", "phone": "0600000000"}, headers=auth(gars101a_token))
+r = client.patch("/auth/me", json={"email": "gars@example.com", "phone": "0600000000", "current_password": "password123"}, headers=auth(gars101a_token))
 check("profile update works", r.status_code == 200 and r.json()["email"] == "gars@example.com")
 
 # ---------- Suppression / réaffectation / désactivation ----------

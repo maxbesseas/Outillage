@@ -5,6 +5,7 @@ import { escapeHtml, toast } from "../ui.js";
 import { navigate } from "../router.js";
 import { pushSupported, currentSubscription, enablePush, disablePush } from "../push.js";
 import { getTheme, setTheme } from "../theme.js";
+import { qrSVG } from "../qr.js";
 
 export async function renderProfile(app) {
   const me = await api.get("/auth/me");
@@ -45,8 +46,14 @@ export async function renderProfile(app) {
         <label>Téléphone</label>
         <input type="tel" name="phone" value="${escapeHtml(me.phone || "")}" autocomplete="tel" inputmode="tel"/>
       </div>
+      <div class="field">
+        <label>Mot de passe actuel (obligatoire pour changer d'e-mail)</label>
+        <input type="password" name="current_password" autocomplete="current-password"/>
+      </div>
       <button type="submit" class="btn btn-primary">Enregistrer</button>
-    </form>`
+    </form>
+    <h3>Double authentification</h3>
+    <div class="card" id="mfa-card"></div>`
     }
 
     <h3>Mot de passe</h3>
@@ -63,7 +70,7 @@ export async function renderProfile(app) {
         <label>Confirmer le nouveau mot de passe</label>
         <input type="password" name="confirm" autocomplete="new-password" required minlength="8"/>
       </div>
-      <p class="card-sub">Au moins 8 caractères, dont une lettre et un chiffre. Le changement déconnecte vos autres appareils.</p>
+      <p class="card-sub">Au moins 12 caractères, dont une lettre et un chiffre. Le changement déconnecte vos autres appareils.</p>
       <button type="submit" class="btn btn-primary">Changer le mot de passe</button>
     </form>
 
@@ -145,13 +152,16 @@ export async function renderProfile(app) {
     themeSelect.addEventListener("change", () => setTheme(themeSelect.value));
   }
 
+  renderMfa(me);
+
   const contactForm = document.getElementById("contact-form");
   if (contactForm) {
     contactForm.addEventListener("submit", async (e) => {
       e.preventDefault();
       const data = Object.fromEntries(new FormData(contactForm).entries());
       try {
-        const updated = await api.patch("/auth/me", { email: data.email || null, phone: data.phone || null });
+        const updated = await api.patch("/auth/me", { email: data.email || null, phone: data.phone || null, current_password: data.current_password || null });
+        contactForm.elements.current_password.value = "";
         setSession(state.token, updated);
         toast("Coordonnées enregistrées", "success");
       } catch (err) {
@@ -230,4 +240,52 @@ export async function renderProfile(app) {
       toast(err instanceof ApiError ? err.message : "Erreur", "error");
     }
   });
+}
+
+function renderMfa(me) {
+  const card = document.getElementById("mfa-card");
+  if (!card) return;
+  if (me.totp_enabled) {
+    card.innerHTML = `<p class="card-sub">Active : un code est demandé à chaque connexion.</p>
+      <form id="mfa-off" class="form-grid">
+        <div class="field"><label>Mot de passe actuel</label><input type="password" name="current_password" autocomplete="current-password" required/></div>
+        <div class="field"><label>Code de vérification</label><input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required/></div>
+        <button type="submit" class="btn">Désactiver</button>
+      </form>`;
+    card.querySelector("#mfa-off").addEventListener("submit", (e) => mfaSubmit(e, "/auth/mfa/disable", "Double authentification désactivée"));
+    return;
+  }
+  card.innerHTML = `<p class="card-sub">Protégez votre compte avec un code généré par une application d'authentification sur votre téléphone.</p>
+    <form id="mfa-start" class="form-grid">
+      <div class="field"><label>Mot de passe actuel</label><input type="password" name="current_password" autocomplete="current-password" required/></div>
+      <button type="submit" class="btn btn-primary">Activer</button>
+    </form>`;
+  card.querySelector("#mfa-start").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      const setup = await api.post("/auth/mfa/setup", Object.fromEntries(new FormData(e.target).entries()));
+      card.innerHTML = `<p class="card-sub">Scannez ce code avec votre application, ou saisissez la clé, puis entrez le code affiché.</p>
+        <div>${qrSVG(setup.uri, { size: 192 })}</div>
+        <p class="card-sub"><code>${escapeHtml(setup.secret)}</code></p>
+        <form id="mfa-confirm" class="form-grid">
+          <div class="field"><label>Code de vérification</label><input type="text" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" required/></div>
+          <button type="submit" class="btn btn-primary">Confirmer</button>
+        </form>`;
+      card.querySelector("#mfa-confirm").addEventListener("submit", (ev) => mfaSubmit(ev, "/auth/mfa/enable", "Double authentification activée"));
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : "Erreur", "error");
+    }
+  });
+}
+
+async function mfaSubmit(e, path, message) {
+  e.preventDefault();
+  try {
+    const updated = await api.post(path, Object.fromEntries(new FormData(e.target).entries()));
+    setSession(state.token, updated);
+    toast(message, "success");
+    renderMfa(updated);
+  } catch (err) {
+    toast(err instanceof ApiError ? err.message : "Erreur", "error");
+  }
 }

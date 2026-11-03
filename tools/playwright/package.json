@@ -1,0 +1,11 @@
+{
+  "name": "fauche-tests-navigateur",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1"
+  }
+}

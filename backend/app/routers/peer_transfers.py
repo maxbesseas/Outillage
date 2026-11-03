@@ -53,6 +53,8 @@ def create_peer_transfer(
     else:
         from_user_id = counterpart.id
         to_user_id = current_user.id
+        if tool.current_holder_id != counterpart.id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ce collègue ne détient pas cet outil")
 
     existing = (
         db.query(PeerTransfer)
@@ -101,6 +103,8 @@ def confirm_peer_transfer(
     transfer.confirmed_at = datetime.utcnow()
 
     tool = db.query(PersonalTool).filter(PersonalTool.id == transfer.tool_id).first()
+    if tool.current_holder_id != transfer.from_user_id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="L'outil a changé de détenteur depuis cette déclaration")
     tool.current_holder_id = transfer.to_user_id
 
     db.commit()

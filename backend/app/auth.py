@@ -5,38 +5,54 @@ import secrets
 from datetime import timedelta
 from typing import Optional
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordBearer
 import jwt
 from jwt import PyJWTError as JWTError
-from passlib.context import CryptContext
+import bcrypt
 from sqlalchemy.orm import Session
 
-from . import config, utils
+from . import charter, config, utils
 from .database import get_db
 from .models import RefreshToken, User, UserRole
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
 PASSWORD_CHANGE_REQUIRED_DETAIL = "Vous devez changer votre mot de passe avant de continuer"
 PASSWORD_CHANGE_HEADER = {"X-Auth-Error": "password_change_required"}
+CHARTER_REQUIRED_DETAIL = "Vous devez accepter la charte avant de continuer"
+CHARTER_REQUIRED_HEADER = {"X-Auth-Error": "charter_required"}
+
+# Liste courte : refuse les mots de passe les plus employés, y compris avec un chiffre ajouté.
+COMMON_PASSWORDS = {
+    "password", "motdepasse", "azerty", "qwerty", "admin", "administrateur", "bonjour", "soleil", "fauche", "outillage",
+    "chantier", "changeme", "welcome", "letmein", "doudou", "marseille", "toulouse", "nicolas", "thomas", "julien",
+}
+
+FILE_COOKIE = "fauche_files"
+FILE_COOKIE_AUDIENCE = "uploads"
+FILE_COOKIE_HOURS = 8
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    return bcrypt.hashpw(password.encode("utf-8")[:72], bcrypt.gensalt()).decode("ascii")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    try:
+        return bcrypt.checkpw(plain_password.encode("utf-8")[:72], hashed_password.encode("ascii"))
+    except ValueError:
+        return False
 
 
 def validate_password_strength(password: str, username: Optional[str] = None):
-    if len(password) < 8 or not re.search(r"[A-Za-z]", password) or not re.search(r"\d", password):
+    if len(password) < config.PASSWORD_MIN_LENGTH or not re.search(r"[A-Za-z]", password) or not re.search(r"\d", password):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Le mot de passe doit contenir au moins 8 caractères dont une lettre et un chiffre",
+            detail=f"Le mot de passe doit contenir au moins {config.PASSWORD_MIN_LENGTH} caractères dont une lettre et un chiffre",
         )
+    if config.IS_PROD and re.sub(r"[\d\W_]+", "", password).lower() in COMMON_PASSWORDS:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Ce mot de passe est trop courant, choisissez-en un autre")
     if username and password.lower() == username.lower():
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -54,13 +70,13 @@ def generate_temporary_password() -> str:
 
 @lru_cache(maxsize=1)
 def _decoy_hash() -> str:
-    return pwd_context.hash(secrets.token_urlsafe(16))
+    return hash_password(secrets.token_urlsafe(16))
 
 
 def authenticate_user(db: Session, username: str, password: str) -> Optional[User]:
     user = db.query(User).filter(User.username == username).first()
     if not user or not user.is_active:
-        pwd_context.verify(password, _decoy_hash())  # même durée de réponse : ne révèle pas si le compte existe
+        verify_password(password, _decoy_hash())  # même durée de réponse : ne révèle pas si le compte existe
         return None
     if not verify_password(password, user.hashed_password):
         return None
@@ -104,6 +120,32 @@ def invalidate_sessions(db: Session, user: User):
     revoke_all_refresh_tokens(db, user.id)
 
 
+def set_file_cookie(response: Response, request: Request, user: User):
+    """Les balises <img> n'envoient pas d'en-tête Authorization : un cookie limité à /uploads les authentifie."""
+    expire = utils.now() + timedelta(hours=FILE_COOKIE_HOURS)
+    token = jwt.encode({"sub": user.username, "tv": user.token_version or 0, "aud": FILE_COOKIE_AUDIENCE, "exp": expire},
+                       config.SECRET_KEY, algorithm=config.ALGORITHM)
+    secure = request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https"
+    response.set_cookie(FILE_COOKIE, token, max_age=FILE_COOKIE_HOURS * 3600, path="/uploads", httponly=True, samesite="lax", secure=secure)
+
+
+def clear_file_cookie(response: Response):
+    response.delete_cookie(FILE_COOKIE, path="/uploads")
+
+
+def user_from_file_cookie(request: Request, db: Session) -> Optional[User]:
+    try:
+        payload = jwt.decode(request.cookies.get(FILE_COOKIE, ""), config.SECRET_KEY, algorithms=[config.ALGORITHM], audience=FILE_COOKIE_AUDIENCE)
+    except JWTError:
+        return None
+    user = db.query(User).filter(User.username == payload.get("sub")).first()
+    if user is None or not user.is_active or (user.token_version or 0) != payload.get("tv", 0):
+        return None
+    if user.must_change_password and config.IS_PROD:
+        return None
+    return user
+
+
 def client_ip(request: Optional[Request]) -> Optional[str]:
     if request is None or request.client is None:
         return None
@@ -142,6 +184,8 @@ def get_current_user(user: User = Depends(get_current_user_any)) -> User:
             detail=PASSWORD_CHANGE_REQUIRED_DETAIL,
             headers=PASSWORD_CHANGE_HEADER,
         )
+    if config.CHARTER_ENFORCED and (user.charter_version or 0) < charter.VERSION:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=CHARTER_REQUIRED_DETAIL, headers=CHARTER_REQUIRED_HEADER)
     return user
 
 

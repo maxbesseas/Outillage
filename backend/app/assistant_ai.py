@@ -16,6 +16,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from . import appsettings, controls, utils
+from .agencies import agency_scope
 from .hierarchy import ROLE_LABELS, visible_user_ids
 from .models import AgencyTool, AgencyToolStatus, Epi, Loan, LoanStatus, PersonalTool, User, UserRole
 from .models_ext import Notification
@@ -85,7 +86,7 @@ def _is_manager(user: User) -> bool:
 
 
 def _agency_scope(user: User) -> Optional[str]:
-    return None if user.role == UserRole.admin else user.agency_number
+    return agency_scope(user)
 
 
 def tool_search_tools(db: Session, user: User, query: str = "", kind: Optional[str] = None, status: Optional[str] = None) -> dict:

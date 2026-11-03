@@ -1,10 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from .. import schemas
+from .. import schemas, utils
 from ..auth import get_current_user
 from ..database import get_db
 from ..hierarchy import visible_user_ids
@@ -23,6 +23,8 @@ from ..models import (
 
 router = APIRouter(prefix="/transfers", tags=["transfers"])
 
+PAST_RETURN_TOLERANCE = timedelta(0)
+
 
 @router.get("", response_model=list[schemas.TransferOut])
 def list_transfers(
@@ -31,6 +33,8 @@ def list_transfers(
     current_user: User = Depends(get_current_user),
 ):
     query = db.query(Transfer)
+    if current_user.role == UserRole.gars_chantier:
+        scope = "mine"
 
     if scope == "team":
         ids = visible_user_ids(db, current_user)
@@ -57,6 +61,8 @@ def _create_transfer_core(
 
     if not payload.to_external_name.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Le nom du destinataire est requis")
+    if payload.planned_return_date and payload.planned_return_date.replace(tzinfo=None).date() < (utils.now() - PAST_RETURN_TOLERANCE).date():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="La date de retour prévue est déjà passée")
 
     data = payload.model_dump()
 

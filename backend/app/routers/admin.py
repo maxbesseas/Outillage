@@ -12,6 +12,7 @@ from .. import audit, config, jobs, schemas
 from ..auth import get_current_admin
 from ..database import get_db
 from ..models import AuditLog, User
+from ..utils import safe_text
 
 audit_router = APIRouter(prefix="/audit-log", tags=["audit"])
 jobs_router = APIRouter(prefix="/admin", tags=["admin"])
@@ -108,7 +109,7 @@ def export_audit(
     for r in rows:
         writer.writerow([
             r.created_at.strftime("%d/%m/%Y %H:%M:%S") if r.created_at else "",
-            r.user.full_name if r.user else "",
+            safe_text(r.user.full_name) if r.user else "",
             r.action,
             r.entity_type or "",
             r.entity_id or "",

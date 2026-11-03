@@ -27,8 +27,11 @@ export async function renderLabels(app) {
   if (opts.onlyUnprinted) params.set("only_unprinted", "true");
   if (opts.q) params.set("q", opts.q);
   let tools = [];
+  let total = 0;
   try {
-    tools = await api.get(`/tools/labels?${params}`);
+    const page = await api.getPage(`/tools/labels?${params}`);
+    tools = page.items;
+    total = page.total;
   } catch (err) {
     toast(err instanceof ApiError ? err.message : "Erreur", "error");
   }
@@ -46,6 +49,8 @@ export async function renderLabels(app) {
       <input id="l-q" placeholder="Rechercher" value="${escapeHtml(opts.q)}"/>
       <label><input type="checkbox" id="l-unprinted" ${opts.onlyUnprinted ? "checked" : ""}/> Non imprimées seulement</label>
     </div>
+    ${total > tools.length ? `<div class="alert-block warning no-print" id="labels-truncated"><strong>${tools.length} étiquettes affichées sur ${total}</strong>
+      <div class="card-sub">Filtrez par type ou par recherche, ou cochez « Non imprimées seulement » pour traiter le reste par lots.</div></div>` : ""}
     <div class="labels-grid tpl-grid-${opts.template}" id="labels-sheet">${tools.map(labelHtml).join("") || '<div class="empty-state">Aucun outil.</div>'}</div>`;
 
   const bind = (id, key, ev = "change", get = (e) => e.target.value) =>

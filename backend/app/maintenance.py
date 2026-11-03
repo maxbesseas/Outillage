@@ -178,7 +178,7 @@ def transition(db: Session, ticket: MaintenanceTicket, new_status: str, user: Us
 
 def stats(db: Session, agency: Optional[str]) -> dict:
     query = db.query(MaintenanceTicket)
-    if agency:
+    if agency is not None:
         query = query.filter(MaintenanceTicket.agency_number == agency)
     tickets = query.all()
     repaired = [t for t in tickets if t.status in ("repare", "clos") and t.back_at]

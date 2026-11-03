@@ -162,7 +162,7 @@ notifications_mod.send_email = original_send
 ua_private = ec.generate_private_key(ec.SECP256R1())
 ua_public = ua_private.public_key().public_bytes(serialization.Encoding.X962, serialization.PublicFormat.UncompressedPoint)
 ua_auth = _os.urandom(16)
-sub_payload = {"endpoint": "https://push.example.com/send/abc123",
+sub_payload = {"endpoint": "https://fcm.googleapis.com/send/abc123",
                "keys": {"p256dh": webpush_mod.b64u(ua_public), "auth": webpush_mod.b64u(ua_auth)}}
 r = client.get("/push/public-key", headers=auth(p1b_token))
 vapid_public = r.json()["public_key"]
@@ -202,7 +202,7 @@ try:
     signature_ok = True
 except Exception:
     signature_ok = False
-check("VAPID JWT is signed with the server key and targets the push service", signature_ok and claims["aud"] == "https://push.example.com")
+check("VAPID JWT is signed with the server key and targets the push service", signature_ok and claims["aud"] == "https://fcm.googleapis.com")
 push_code["value"] = 410
 with database.SessionLocal() as s:
     notify_mod.create(s, next(u["id"] for u in client.get("/users", headers=auth(admin_token)).json() if u["username"] == "notifgars2"),

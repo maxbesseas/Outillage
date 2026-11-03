@@ -1,21 +1,23 @@
 import json
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response, status
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi import Depends, FastAPI, HTTPException, Request, Response, status
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DataError, IntegrityError
+from sqlalchemy.orm import Session
 from starlette.types import Scope
 
-from . import alerts_p5, config, database, migrations, storage, models_ext, models_p2, models_p3, models_p4, models_p5, models_p6, models_p7, models_p8, models_p9  # noqa: F401
-from .auth import hash_password
+from . import alerts_p5, config, database, file_access, limits, migrations, models_security, storage, models_ext, models_p2, models_p3, models_p4, models_p5, models_p6, models_p7, models_p8, models_p9  # noqa: F401
+from .auth import hash_password, user_from_file_cookie
 from .config import DEFAULT_ADMIN_USERNAME, FRONTEND_DIR, UPLOAD_DIR
 from .idempotency import idempotency_middleware
 from .jobs import scheduler
 from .models import User, UserRole
 from .routers import (
+    charter as charter_router,
     microsoft,
     admin,
     agencies,
@@ -107,10 +109,21 @@ app.add_middleware(
 
 @app.exception_handler(IntegrityError)
 async def integrity_error(request: Request, exc: IntegrityError):
-    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": "Opération impossible : des données y sont encore liées."})
+    text_error = str(exc.orig).lower()
+    duplicate = "unique" in text_error or "duplicate" in text_error
+    detail = "Cette valeur existe déjà : choisissez-en une autre." if duplicate else "Opération impossible : des données y sont encore liées."
+    return JSONResponse(status_code=status.HTTP_409_CONFLICT, content={"detail": detail})
+
+
+@app.exception_handler(OverflowError)
+@app.exception_handler(DataError)
+async def value_out_of_range(request: Request, exc: Exception):
+    """Un identifiant trop grand pour la base ne désigne aucun élément."""
+    return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content={"detail": "Élément introuvable"})
 
 
 app.middleware("http")(idempotency_middleware)
+app.middleware("http")(limits.limits_middleware)
 
 
 @app.middleware("http")
@@ -121,14 +134,24 @@ async def security_headers(request: Request, call_next):
 
 app.add_middleware(NaiveUtcMiddleware)
 
-if storage.enabled():
-    @app.get("/uploads/{path:path}", include_in_schema=False)
-    def uploaded_file(path: str):
+
+@app.get("/uploads/{path:path}", include_in_schema=False)
+def uploaded_file(path: str, request: Request, db: Session = Depends(database.get_db)):
+    user = user_from_file_cookie(request, db)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Connexion requise")
+    if not file_access.can_read(db, user, f"/uploads/{path}"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fichier introuvable")
+    if storage.enabled():
         return RedirectResponse(storage.presigned_url(path), status_code=status.HTTP_307_TEMPORARY_REDIRECT, headers={"Cache-Control": "no-store"})
-else:
-    app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
+    local = (UPLOAD_DIR / path).resolve()
+    if not local.is_relative_to(UPLOAD_DIR.resolve()) or not local.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Fichier introuvable")
+    return FileResponse(local, headers={"Cache-Control": "private, no-store"})
+
 
 app.include_router(auth.router)
+app.include_router(charter_router.router)
 app.include_router(microsoft.router)
 app.include_router(users.router)
 app.include_router(agencies.router)

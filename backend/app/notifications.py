@@ -1,14 +1,19 @@
+import logging
 import smtplib
+import ssl
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import List, Optional, Tuple
 
+import certifi
 from sqlalchemy.orm import Session
 
+from . import secrets_box
 from .models import Settings
 
 WORN_STATE_THRESHOLD = 2
+logger = logging.getLogger(__name__)
 
 
 def get_settings(db: Session) -> Settings:
@@ -54,14 +59,15 @@ def send_email(
 
         with smtplib.SMTP(settings.smtp_host, settings.smtp_port or 587, timeout=10) as server:
             if settings.smtp_use_tls:
-                server.starttls()
+                server.starttls(context=ssl.create_default_context(cafile=certifi.where()))
             if settings.smtp_username:
-                server.login(settings.smtp_username, settings.smtp_password or "")
+                server.login(settings.smtp_username, secrets_box.unseal(settings.smtp_password) or "")
             server.sendmail(sender, [to_address], msg.as_string())
 
         return True, "ok"
     except Exception as exc:
-        return False, f"Échec envoi email : {exc}"
+        logger.warning("Échec d'envoi d'e-mail : %s", exc.__class__.__name__)
+        return False, "Échec de l'envoi de l'e-mail"
 
 
 def notify_magasinier(db: Session, subject: str, body: str) -> Tuple[bool, str]:

@@ -100,6 +100,10 @@ class User(Base):
     calendar_token = Column(String, nullable=True, unique=True)
     microsoft_tid = Column(String, nullable=True)
     microsoft_oid = Column(String, nullable=True)
+    totp_secret = Column(String, nullable=True)
+    totp_enabled = Column(Boolean, default=False, nullable=False, server_default="0")
+    totp_last_step = Column(Integer, nullable=True)
+    charter_version = Column(Integer, default=0, nullable=False, server_default="0")
     created_at = Column(DateTime, default=datetime.utcnow)
 
     manager = relationship("User", remote_side=[id])

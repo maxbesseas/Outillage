@@ -1,4 +1,4 @@
-const CACHE_NAME = "outillage-shell-v46";
+const CACHE_NAME = "outillage-shell-v49";
 
 const APP_SHELL = [
   "/",
@@ -57,6 +57,7 @@ const APP_SHELL = [
   "/js/views/warranty.js",
   "/js/views/settings.js",
   "/js/views/profile.js",
+  "/js/views/charter.js",
   "/js/views/forgotPassword.js",
   "/js/views/resetPassword.js",
   "/js/views/audit.js",
@@ -83,6 +84,7 @@ const APP_SHELL = [
 
 const API_PREFIXES = [
   "/auth",
+  "/charter",
   "/users",
   "/personal-tools",
   "/agency-tools",

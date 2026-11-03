@@ -36,3 +36,12 @@ Source/
 Thumbs.db
 .vscode/
 .idea/
+
+# Tests navigateur
+test-results/
+playwright-report/
+tools/playwright/.run/
+
+# Rapports : décrivent des attaques, à ne pas publier
+SECURITY_AUDIT.md
+QA_REPORT.md

@@ -15,3 +15,11 @@ backend/smoke_*.py
 backend/migrate_to_postgres.py
 DOCUMENTATION_COMPLETE.md
 RESUME_PROJET.md
+CHANGELOG.md
+DEPLOIEMENT.md
+README.md
+SECURITY_AUDIT.md
+backend/seed_demo.py
+backend/sql/
+.github/
+QA_REPORT.md

@@ -121,7 +121,8 @@ def depart(user_id: int, payload: DepartIn, request: Request, db: Session = Depe
             blockers.append(f"{len(items['subordinates'])} collaborateur(s) rattaché(s) : indiquez un nouveau responsable")
         else:
             subordinate_target = db.query(User).filter(User.id == payload.reassign_subordinates_to, User.is_active.is_(True)).first()
-            if subordinate_target is None or subordinate_target.role != user.role or subordinate_target.id == user.id:
+            if subordinate_target is None or subordinate_target.role != user.role or subordinate_target.id == user.id \
+                    or (current_user.role != UserRole.admin and subordinate_target.agency_number != user.agency_number):
                 blockers.append("Le nouveau responsable doit être un autre utilisateur de même rôle")
     if blockers:
         _fail("Départ impossible : " + " ; ".join(blockers))

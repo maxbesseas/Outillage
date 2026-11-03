@@ -8,6 +8,7 @@ from openpyxl import Workbook, load_workbook
 
 from .config import EXCEL_SOURCE_DIR, EXCEL_SYNC_ENABLED
 from .models import AgencyTool, AgencyToolStatus
+from .utils import safe_text
 
 COLUMNS = [
     "ID MATERIEL ",
@@ -118,7 +119,7 @@ def export_agency_tools_workbook(tools: Iterable[AgencyTool]) -> BytesIO:
             _state_label(tool.status, tool.state),
             tool.comment,
         ]
-        ws.append(row)
+        ws.append([safe_text(v) for v in row])
         row_number = idx + 1
         if tool.purchase_date:
             ws.cell(row=row_number, column=8).number_format = DATE_FORMAT

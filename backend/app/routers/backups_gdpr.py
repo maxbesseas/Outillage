@@ -11,12 +11,14 @@ from .. import audit, backups, excel_export, utils
 from ..auth import get_current_admin, get_current_user, hash_password, invalidate_sessions
 from ..database import get_db
 from ..models import (
-    AgencyTool, Epi, Loan, LoanStatus, PersonalTool, PeerTransfer, PeerTransferStatus, RefreshToken, Transfer, TransferStatus,
-    User, UserRole,
+    AgencyTool, AuditLog, Epi, Loan, LoanStatus, LoginAttempt, PasswordResetToken, PersonalTool, PeerTransfer, PeerTransferStatus,
+    RefreshToken, Transfer, TransferStatus, User, UserRole,
 )
 from ..models_ext import Notification, PushSubscription
 from ..models_p2 import Inspection, UserQualification
+from ..models_p3 import IdempotencyKey, ToolPhoto
 from ..models_p5 import MaintenanceTicket
+from ..models_security import CharterAcceptance
 from ..models_p8 import ExcelSyncTask
 from ..models_p9 import AssistantAction, AssistantMessage
 from .users import _holdings
@@ -123,6 +125,17 @@ def export_personal_data(user_id: int, request: Request, db: Session = Depends(g
                            for q in db.query(UserQualification).filter(UserQualification.user_id == target.id)],
         "notifications": [{"type": n.type, "title": n.title, "created_at": n.created_at} for n in db.query(Notification).filter(Notification.user_id == target.id).limit(500)],
         "push_subscriptions": db.query(PushSubscription).filter(PushSubscription.user_id == target.id).count(),
+        "loan_signatures": [{"loan_id": l.id, "signed_name": l.signed_name, "signed_at": l.signed_at, "signature": l.signature_json}
+                            for l in db.query(Loan).filter(Loan.borrower_id == target.id, Loan.signature_json.isnot(None))],
+        "external_loans": [{"id": t.id, "recipient": t.to_external_name, "status": t.status.value, "date": t.transfer_date}
+                           for t in db.query(Transfer).filter(Transfer.from_user_id == target.id)],
+        "peer_transfers": [{"id": p.id, "tool_id": p.tool_id, "from": p.from_user_id, "to": p.to_user_id, "status": p.status.value, "date": p.transfer_date}
+                           for p in db.query(PeerTransfer).filter((PeerTransfer.from_user_id == target.id) | (PeerTransfer.to_user_id == target.id))],
+        "photos_taken": [{"id": p.id, "path": p.path, "date": p.created_at} for p in db.query(ToolPhoto).filter(ToolPhoto.taken_by_id == target.id)],
+        "charter_acceptances": [{"version": c.version, "accepted_at": c.accepted_at, "ip": c.ip}
+                                for c in db.query(CharterAcceptance).filter(CharterAcceptance.user_id == target.id)],
+        "activity_log": [{"action": a.action, "date": a.created_at, "ip": a.ip}
+                         for a in db.query(AuditLog).filter(AuditLog.user_id == target.id).order_by(AuditLog.id.desc()).limit(1000)],
     }
     audit.record(db, "personal_data_exported", current_user.id, "user", target.id, request)
     db.commit()
@@ -143,7 +156,20 @@ def anonymize_user(user_id: int, request: Request, db: Session = Depends(get_db)
         listing = ", ".join(f"{n} {label}" for label, n in blocking.items())
         _fail(f"Anonymisation impossible : ce compte a encore {listing}. Réaffectez son matériel d'abord.")
 
+    old_username = target.username
+    for entry in db.query(AuditLog).filter((AuditLog.user_id == target.id) | AuditLog.details.contains(old_username)):
+        if entry.user_id == target.id:
+            entry.ip, entry.user_agent = None, None
+        if entry.details:
+            entry.details = entry.details.replace(old_username, f"anonyme-{target.id}")
+    db.query(LoginAttempt).filter(LoginAttempt.identifier == old_username.lower()).delete(synchronize_session=False)
+    db.query(IdempotencyKey).filter(IdempotencyKey.username == old_username).delete(synchronize_session=False)
+    db.query(PasswordResetToken).filter(PasswordResetToken.user_id == target.id).delete(synchronize_session=False)
+    db.query(CharterAcceptance).filter(CharterAcceptance.user_id == target.id).update({"ip": None}, synchronize_session=False)
+    db.query(Loan).filter(Loan.borrower_id == target.id).update({"signature_json": None, "signed_name": None}, synchronize_session=False)
+    db.query(UserQualification).filter(UserQualification.user_id == target.id).update({"document_path": None}, synchronize_session=False)
     target.username = f"anonyme-{target.id}"
+    target.totp_secret, target.totp_enabled, target.totp_last_step = None, False, None
     target.full_name = f"Utilisateur anonymisé #{target.id}"
     target.email = None
     target.phone = None

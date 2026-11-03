@@ -37,6 +37,13 @@ $env:OUTILLAGE_ADMIN_PASSWORD = "<mot de passe long et unique>"
 
 Relancer `app.db_setup` après chaque nouvelle migration : sur Vercel, le schéma n'est pas modifié au démarrage.
 
+Puis, toujours avec le compte `postgres`, dans **Supabase > SQL Editor** :
+
+1. `backend/sql/securite_supabase.sql` ferme l'API publique de Supabase sur toutes les tables.
+2. `backend/sql/role_applicatif.sql` crée le rôle limité `fauche_app`, à utiliser sur Vercel à la place de `postgres`. Remplacer d'abord le mot de passe dans l'éditeur, sans enregistrer le fichier.
+
+Relancer ces deux scripts après chaque migration. Le certificat du serveur se vérifie avec `sslmode=verify-full` et `sslrootcert` si le certificat Supabase est disponible sur le poste ; Vercel utilise `sslmode=require`.
+
 ## 3. Vercel
 
 1. Plan **Hobby**, réservé à un usage personnel et non commercial, avec un seul cron par jour. Pour un usage commercial, passer au plan Pro, puis rapprocher le cron dans `vercel.json` (par exemple `*/5 * * * *`).
@@ -52,7 +59,21 @@ Le plan gratuit n'en fait aucune. Depuis un poste équipé des outils PostgreSQL
 pg_dump --format=custom --file=outillage.dump "<adresse de la base>"
 ```
 
-Le fichier obtenu contient toutes les données, comptes compris : le garder hors du dépôt. Copier aussi les fichiers du compartiment.
+Le fichier obtenu contient toutes les données, comptes compris : le garder hors du dépôt. Il ne contient pas les photos ni les documents : copier aussi le compartiment. Tester une restauration sur une base vide au moins une fois.
+
+## 5. Mettre à jour une base existante
+
+Dans cet ordre, sinon l'application ne trouve pas ses nouvelles colonnes :
+
+1. Depuis `backend/`, avec l'adresse en mode session (port 5432) et le compte `postgres` : `python -m app.db_setup`.
+2. Relancer les deux scripts de la section 2.
+3. Déployer le code.
+
+`OUTILLAGE_SECRET_KEY` chiffre désormais le mot de passe SMTP et les secrets de double authentification : la changer oblige à ressaisir le premier et à réactiver les seconds.
+
+## 6. Données de démonstration
+
+Depuis `backend/`, avec l'adresse en mode session (port 5432) : `python seed_demo.py --yes`. Le script affiche une seule fois le mot de passe commun des comptes `demo.*`. Après la présentation : `python seed_demo.py --reset`, qui retire uniquement ces données.
 
 ## Différences avec le mode local
 

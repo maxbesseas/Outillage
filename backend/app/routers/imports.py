@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from sqlalchemy.orm import Session
 
-from .. import audit, excel_export, importer, utils
+from .. import audit, config, excel_export, importer, utils
 from ..auth import get_current_manager
 from ..database import get_db
 from ..models import User, UserRole
@@ -145,18 +145,20 @@ def list_reports(db: Session = Depends(get_db), current_user: User = Depends(get
 
 
 @router.get("/from-excel/status")
-def excel_status(db: Session = Depends(get_db), current_user: User = Depends(get_current_manager)):
-    agency = current_user.agency_number
-    return {"agency_number": agency, "file": excel_export.workbook_name(agency) if agency else None}
+def excel_status(agency_number: Optional[str] = None, db: Session = Depends(get_db), current_user: User = Depends(get_current_manager)):
+    agency = agency_number if current_user.role == UserRole.admin and agency_number else current_user.agency_number
+    return {"enabled": config.EXCEL_SYNC_ENABLED, "agency_number": agency, "file": excel_export.workbook_name(agency) if agency else None}
 
 
 @router.post("/from-excel")
 def import_from_excel_file(request: Request, mode: str = "simulate", agency_number: Optional[str] = None, db: Session = Depends(get_db),
                            current_user: User = Depends(get_current_manager)):
     """Relit le classeur Excel de l'agence posé sur le serveur (Source/) et met la base à jour (codes déjà connus inclus)."""
+    if not config.EXCEL_SYNC_ENABLED:
+        _fail("Aucun classeur n'est conservé sur ce serveur : importez plutôt le fichier ci-dessus", status.HTTP_409_CONFLICT)
     agency = agency_number if current_user.role == UserRole.admin and agency_number else current_user.agency_number
     if not agency:
-        _fail("Agence inconnue")
+        _fail("Choisissez l'agence à relire")
     path = excel_export.find_workbook(agency)
     if path is None:
         _fail(f"Fichier Excel introuvable pour l'agence {agency}", status.HTTP_404_NOT_FOUND)

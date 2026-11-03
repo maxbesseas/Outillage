@@ -1,4 +1,5 @@
 """Phase 6 : chantiers, coûts par chantier, statistiques d'utilisation du parc."""
+import re
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -7,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from .. import appsettings, audit, sites, utils
+from ..agencies import agency_scope
 from ..auth import get_current_manager, get_current_user
 from ..database import get_db
 from ..models import AgencyTool, AgencyToolStatus, Loan, LoanStatus, User, UserRole
@@ -73,6 +75,25 @@ def _agency_for(user: User, requested: Optional[str]) -> Optional[str]:
     return user.agency_number
 
 
+def _clean_code(db: Session, agency: Optional[str], code: Optional[str], site_id: Optional[int] = None) -> Optional[str]:
+    code = (code or "").strip() or None
+    if code is None:
+        return None
+    pattern = appsettings.get(db, "site.code_pattern")
+    try:
+        valid = not pattern or re.fullmatch(pattern, code) is not None
+    except re.error:
+        valid = True
+    if not valid:
+        _fail("Le code du chantier doit contenir 6 chiffres" if pattern == r"\d{6}" else "Le code du chantier n'a pas le format attendu")
+    clash = db.query(Site).filter(Site.agency_number == agency, Site.code == code)
+    if site_id is not None:
+        clash = clash.filter(Site.id != site_id)
+    if clash.first():
+        _fail("Ce code de chantier existe déjà dans l'agence")
+    return code
+
+
 def _check_manager_user(db: Session, agency: Optional[str], manager_id: Optional[int]):
     if manager_id is None:
         return
@@ -111,7 +132,8 @@ def create_site(payload: SiteIn, request: Request, db: Session = Depends(get_db)
     if payload.start_date and payload.end_date and payload.end_date < payload.start_date:
         _fail("La date de fin est antérieure au début")
     _check_manager_user(db, agency, payload.manager_id)
-    site = Site(agency_number=agency, name=name, code=payload.code, client=payload.client, address=payload.address,
+    code = _clean_code(db, agency, payload.code)
+    site = Site(agency_number=agency, name=name, code=code, client=payload.client, address=payload.address,
                 start_date=payload.start_date, end_date=payload.end_date, manager_id=payload.manager_id,
                 notes=payload.notes, status="actif", created_at=utils.now())
     db.add(site)
@@ -141,6 +163,8 @@ def update_site(site_id: int, payload: SitePatch, request: Request, db: Session 
         data["name"] = name
     if "manager_id" in data:
         _check_manager_user(db, site.agency_number, data["manager_id"])
+    if "code" in data:
+        data["code"] = _clean_code(db, site.agency_number, data["code"], site.id)
     start = data.get("start_date", site.start_date)
     end = data.get("end_date", site.end_date)
     if start and end and end < start:
@@ -217,9 +241,7 @@ def site_sheet(site_id: int, db: Session = Depends(get_db), current_user: User =
 
 
 def _scope_agency(user: User, agency: Optional[str]) -> Optional[str]:
-    if user.role == UserRole.admin:
-        return agency or None
-    return user.agency_number
+    return agency_scope(user, agency)
 
 
 @stats_router.get("/sites-cost")

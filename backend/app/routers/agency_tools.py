@@ -8,7 +8,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from .. import audit, controls, excel_export, schemas
-from ..agencies import registry_name_for, require_agency
+from ..agencies import check_same_agency, registry_name_for, require_agency
 from ..auth import get_current_admin, get_current_manager, get_current_user
 from ..database import get_db
 from ..excel_export import export_agency_tools_workbook, sync_new_agency_tool
@@ -196,6 +196,7 @@ def get_agency_tool(tool_id: int, db: Session = Depends(get_db), current_user: U
 def update_agency_tool(
     tool_id: int,
     payload: schemas.AgencyToolUpdate,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_manager),
@@ -207,6 +208,9 @@ def update_agency_tool(
     old_status = tool.status
 
     new_status = data.get("status", tool.status)
+    refusal = controls.status_change_error(current_user, tool.status.value, AgencyToolStatus(new_status).value)
+    if refusal:
+        raise HTTPException(status_code=403, detail=refusal)
 
     if "status" in data and new_status != AgencyToolStatus.hors_service and "loss_reason" not in data:
         data["loss_reason"] = None
@@ -222,6 +226,12 @@ def update_agency_tool(
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Utilisateur assigné introuvable")
 
     comment = data.get("comment")
+    error = schemas.warranty_error(data.get("purchase_date", tool.purchase_date), data.get("warranty_expiration_date", tool.warranty_expiration_date))
+    if error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=error)
+    check_same_agency(db, current_user, data.get("assigned_to_id"), tool.agency_number)
+    if data.get("parent_tool_id") is not None:
+        _get_scoped_or_404(db, data["parent_tool_id"], current_user)
 
     for field, value in data.items():
         setattr(tool, field, value)
@@ -232,6 +242,11 @@ def update_agency_tool(
             old_status.value, tool.status.value,
             current_user.id, "édition", comment=comment,
         )
+    if tool.status != old_status:
+        audit.record(db, "tool_status_changed", current_user.id, "agency_tool", tool.id, request,
+                     {"from": old_status.value, "to": tool.status.value, "source": "édition"})
+    if data:
+        audit.record(db, "agency_tool_updated", current_user.id, "agency_tool", tool.id, request, {"fields": sorted(data)})
 
     db.commit()
     db.refresh(tool)
@@ -262,11 +277,15 @@ def update_agency_tool(
 def control_agency_tool(
     tool_id: int,
     payload: schemas.AgencyToolControlUpdate,
+    request: Request,
     response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     tool = _get_scoped_or_404(db, tool_id, current_user)
+    refusal = controls.status_change_error(current_user, tool.status.value, payload.status.value)
+    if refusal:
+        raise HTTPException(status_code=403, detail=refusal)
 
     old_state = tool.state
     old_status = tool.status
@@ -288,6 +307,9 @@ def control_agency_tool(
         old_status.value, tool.status.value,
         current_user.id, "contrôle", comment=payload.comment,
     )
+    if tool.status != old_status:
+        audit.record(db, "tool_status_changed", current_user.id, "agency_tool", tool.id, request,
+                     {"from": old_status.value, "to": tool.status.value, "source": "contrôle"})
 
     db.commit()
     db.refresh(tool)

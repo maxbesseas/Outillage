@@ -3,6 +3,7 @@ import { initTheme } from "./theme.js";
 import { startWebcamPhotos } from "./cameraCapture.js";
 import { openGlobalSearch, initGlobalSearchShortcut } from "./globalSearch.js";
 import { state, isLoggedIn, isAdmin, isManager, clearSession } from "./state.js";
+import { renderCharter } from "./views/charter.js";
 import { api } from "./api.js";
 import { wireImageFallbacks, escapeHtml, startAccessibleForms } from "./ui.js";
 import { startNotificationPolling, stopNotificationPolling, refreshNotificationCount } from "./notifications.js";
@@ -168,6 +169,7 @@ registerRoute("/login", renderLogin);
 registerRoute("/mot-de-passe-oublie", renderForgotPassword);
 registerRoute("/reinitialiser", renderResetPassword);
 registerRoute("/mon-profil", renderProfile);
+registerRoute("/charte", renderCharter);
 registerRoute("/", renderDashboard);
 registerRoute("/mes-outils", renderPersonalTools);
 registerRoute("/salaries/:id", renderPersonalTools, { guard: isManager });
@@ -206,6 +208,8 @@ registerRoute("/code/:code", renderCodeRedirect);
 registerRoute("/scan", renderScan);
 registerRoute("/synchronisation", renderSync);
 
+let fileCookieRequested = false;
+
 function buildChrome() {
   const header = document.getElementById("app-header");
   const mobileNav = document.getElementById("mobile-nav");
@@ -223,6 +227,10 @@ function buildChrome() {
   initAssistant();
   startNotificationPolling();
   startOfflineSync();
+  if (!fileCookieRequested) {
+    fileCookieRequested = true;
+    api.post("/auth/file-cookie").catch(() => {});
+  }
 
   const current = (location.hash.slice(1) || "/").split("?")[0];
   const fullName = state.user ? state.user.full_name : "";
@@ -250,6 +258,7 @@ function buildChrome() {
           </button>
           <div id="menu-account" class="menu-panel menu-panel-account hidden">
             <p class="menu-account-name">${escapeHtml(fullName)}</p>
+            <a href="#/charte" class="menu-item nav-link" data-path="/charte">${icon("userCheck", { size: 20 })}<span>Charte et données</span></a>
             <a href="#/mon-profil" class="menu-item nav-link" data-path="/mon-profil">${icon("userCheck", { size: 20 })}<span>Mon profil</span></a>
             ${isAdmin() ? `<a href="#/parametres" class="menu-item nav-link" data-path="/parametres">${icon("wrench", { size: 20 })}<span>Paramètres</span></a>` : ""}
             <button type="button" class="menu-item menu-item-logout" id="logout-btn">${icon("logout", { size: 20 })}<span>Déconnexion</span></button>

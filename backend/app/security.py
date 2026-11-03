@@ -24,23 +24,25 @@ CSP = (
 
 BLOCK_BASE_SECONDS = 60
 BLOCK_MAX_SECONDS = 3600
+ACCOUNT_BLOCK_MAX_SECONDS = 900
 
 
 def apply_security_headers(response, request: Request):
     response.headers.setdefault("X-Content-Type-Options", "nosniff")
     response.headers.setdefault("Referrer-Policy", "same-origin")
     response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), payment=()")
     if not request.url.path.startswith(("/docs", "/redoc", "/openapi.json")):
         response.headers.setdefault("Content-Security-Policy", CSP)
     if request.url.scheme == "https" or request.headers.get("x-forwarded-proto") == "https":
-        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000")
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
     return response
 
 
-def _consecutive_failures(db: Session, column, value: str):
+def _consecutive_failures(db: Session, *conditions):
     rows = (
         db.query(LoginAttempt)
-        .filter(column == value)
+        .filter(*conditions)
         .order_by(LoginAttempt.id.desc())
         .limit(50)
         .all()
@@ -66,11 +68,15 @@ def _remaining_block(count: int, threshold: int, last_failure) -> int:
 
 
 def check_login_allowed(db: Session, username: str, ip: Optional[str]):
-    remaining = 0
-    count, last = _consecutive_failures(db, LoginAttempt.identifier, username.lower())
-    remaining = max(remaining, _remaining_block(count, config.LOGIN_MAX_FAILURES_USER, last))
+    identifier = username.lower()
+    # Le blocage court vise le couple compte + adresse : un tiers ne peut pas exclure le titulaire depuis une autre adresse.
+    count, last = _consecutive_failures(db, LoginAttempt.identifier == identifier, LoginAttempt.ip == ip)
+    remaining = _remaining_block(count, config.LOGIN_MAX_FAILURES_USER, last)
+    # Attaque répartie sur de nombreuses adresses : frein plafonné sur le compte.
+    count, last = _consecutive_failures(db, LoginAttempt.identifier == identifier)
+    remaining = max(remaining, min(_remaining_block(count, config.LOGIN_MAX_FAILURES_ACCOUNT, last), ACCOUNT_BLOCK_MAX_SECONDS))
     if ip:
-        count, last = _consecutive_failures(db, LoginAttempt.ip, ip)
+        count, last = _consecutive_failures(db, LoginAttempt.ip == ip)
         remaining = max(remaining, _remaining_block(count, config.LOGIN_MAX_FAILURES_IP, last))
 
     if remaining > 0:

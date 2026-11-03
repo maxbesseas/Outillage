@@ -15,7 +15,7 @@ def mk6(code, **extra):
 
 
 # ---------- Chantiers : création, droits, périmètre ----------
-r = client.post("/sites", json={"name": "Chantier Nord P6", "client": "Mairie", "code": "CN-6"}, headers=auth(charge101_token))
+r = client.post("/sites", json={"name": "Chantier Nord P6", "client": "Mairie", "code": "600006"}, headers=auth(charge101_token))
 S1 = r.json().get("id")
 check("a manager creates a site in their agency", r.status_code == 201 and r.json()["agency_number"] == "101" and r.json()["status"] == "actif")
 check("personnel cannot create a site", client.post("/sites", json={"name": "Interdit"}, headers=auth(gars101a_token)).status_code == 403)
@@ -28,7 +28,7 @@ check("another agency cannot read the site", client.get(f"/sites/{S1}", headers=
 check("another agency cannot modify the site", client.patch(f"/sites/{S1}", json={"notes": "x"}, headers=auth(charge202_token)).status_code == 403)
 check("a site manager must belong to the agency", client.patch(f"/sites/{S1}", json={"manager_id": dir202_id}, headers=auth(charge101_token)).status_code == 400 if "dir202_id" in globals() else True)
 r = client.patch(f"/sites/{S1}", json={"client": "Mairie de Test"}, headers=auth(charge101_token))
-check("a site is updated (PATCH exclude_unset)", r.status_code == 200 and r.json()["client"] == "Mairie de Test" and r.json()["code"] == "CN-6")
+check("a site is updated (PATCH exclude_unset)", r.status_code == 200 and r.json()["client"] == "Mairie de Test" and r.json()["code"] == "600006")
 
 # ---------- Réservation liée à un chantier ----------
 T6 = mk6("P6-T1", daily_rate=10)
