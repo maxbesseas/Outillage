@@ -10,6 +10,7 @@ const TEMPLATES = {
 };
 const SYMBOLS = { qr: "QR code", code39: "Code-barres", both: "QR + code-barres" };
 
+const PREVIEW_SIZE = 100;
 const opts = { kind: "agency", template: "adhesive", symbol: "both", type: "", onlyUnprinted: false, q: "" };
 
 function labelHtml(t) {
@@ -51,7 +52,8 @@ export async function renderLabels(app) {
     </div>
     ${total > tools.length ? `<div class="alert-block warning no-print" id="labels-truncated"><strong>${tools.length} étiquettes affichées sur ${total}</strong>
       <div class="card-sub">Filtrez par type ou par recherche, ou cochez « Non imprimées seulement » pour traiter le reste par lots.</div></div>` : ""}
-    <div class="labels-grid tpl-grid-${opts.template}" id="labels-sheet">${tools.map(labelHtml).join("") || '<div class="empty-state">Aucun outil.</div>'}</div>`;
+    ${tools.length > PREVIEW_SIZE ? `<p class="card-sub no-print" id="labels-preview">Aperçu des ${PREVIEW_SIZE} premières étiquettes : l'impression les contient toutes.</p>` : ""}
+    <div class="labels-grid tpl-grid-${opts.template}" id="labels-sheet">${tools.slice(0, PREVIEW_SIZE).map(labelHtml).join("") || '<div class="empty-state">Aucun outil.</div>'}</div>`;
 
   const bind = (id, key, ev = "change", get = (e) => e.target.value) =>
     document.getElementById(id).addEventListener(ev, (e) => {
@@ -70,6 +72,7 @@ export async function renderLabels(app) {
 
   document.getElementById("print-btn").addEventListener("click", async () => {
     document.body.dataset.labelTpl = opts.template;
+    if (tools.length > PREVIEW_SIZE) document.getElementById("labels-sheet").innerHTML = tools.map(labelHtml).join("");
     window.print();
     try {
       await api.post("/tools/labels/printed", { kind: opts.kind, ids: tools.map((t) => t.id) });

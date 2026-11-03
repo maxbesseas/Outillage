@@ -196,7 +196,7 @@ check("issuing more than the balance is refused", client.post(f"/stock/items/{it
 check("a delivery raises the balance", client.post(f"/stock/items/{item}/movements", json={"kind": "entree", "quantity": 20}, headers=auth(mag)).json()["quantity"] == 22)
 check("a stock count sets the balance", client.post(f"/stock/items/{item}/movements", json={"kind": "inventaire", "quantity": 1}, headers=auth(mag)).json()["quantity"] == 1)
 check("an invalid movement is refused", client.post(f"/stock/items/{item}/movements", json={"kind": "vol", "quantity": 1}, headers=auth(mag)).status_code == 400)
-moves = client.get(f"/stock/items/{item}/movements", headers=auth(gars101a_token)).json()
+moves = client.get(f"/stock/items/{item}/movements", headers=auth(mag)).json()
 check("every movement is journaled with its balance", len(moves) >= 4 and moves[0]["balance_after"] == 1 and any(m["site"] == "Chantier Nord" for m in moves))
 check("low stock items can be filtered", any(i["id"] == item for i in client.get("/stock/items?low_only=true", headers=auth(charge101_token)).json()))
 check("stock never crosses agencies", client.get("/stock/items", headers=auth(charge202_token)).json() == [] and client.post(f"/stock/items/{item}/movements", json={"kind": "entree", "quantity": 1}, headers=auth(charge202_token)).status_code == 403)

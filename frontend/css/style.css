@@ -2191,3 +2191,28 @@ table.simple-table th {
 .camera-open {
   margin-top: 0.4rem;
 }
+
+@media (max-width: 700px) {
+  .btn-sm,
+  .cal-modes button,
+  .tag-row button,
+  #prefs-form select,
+  .cal-toolbar select {
+    min-height: 40px;
+  }
+
+  .cal-cell-head button {
+    min-width: 36px;
+    min-height: 36px;
+  }
+
+  .cal-chip,
+  .cal-more {
+    min-height: 32px;
+  }
+
+  .pref-table input[type="checkbox"] {
+    width: 32px;
+    height: 32px;
+  }
+}

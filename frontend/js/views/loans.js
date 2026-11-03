@@ -117,9 +117,9 @@ async function drawCalendar(container) {
 
     <div class="cal-toolbar">
       <div class="cal-nav">
-        <button class="btn btn-sm" id="cal-prev">${icon("chevronLeft", { size: 16 })}</button>
+        <button class="btn btn-sm" id="cal-prev" aria-label="Période précédente">${icon("chevronLeft", { size: 16 })}</button>
         <div class="cal-title" id="cal-title"></div>
-        <button class="btn btn-sm" id="cal-next">${icon("chevronRight", { size: 16 })}</button>
+        <button class="btn btn-sm" id="cal-next" aria-label="Période suivante">${icon("chevronRight", { size: 16 })}</button>
         <button class="btn btn-sm" id="cal-today">Aujourd'hui</button>
       </div>
       <div class="cal-modes tag-row" style="margin:0;">
@@ -336,7 +336,7 @@ async function renderCalendarBody(container, tools, users) {
         <div class="cal-cell ${outside ? "cal-outside" : ""}">
           <div class="cal-cell-head">
             <span>${day.getDate()}</span>
-            <button data-quick-day="${day.toISOString()}">${icon("plus", { size: 14 })}</button>
+            <button data-quick-day="${day.toISOString()}" aria-label="Réserver le ${day.toLocaleDateString("fr-FR")}">${icon("plus", { size: 14 })}</button>
           </div>
           <div class="cal-chips">
             ${chips}

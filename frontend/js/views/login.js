@@ -95,8 +95,11 @@ export async function renderLogin(app, { query } = {}) {
   const form = document.getElementById("login-form");
   const submitBtn = document.getElementById("login-submit");
 
+  let submitting = false;
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    if (submitting) return;
+    submitting = true;
     const data = Object.fromEntries(new FormData(form).entries());
     if (!data.otp) delete data.otp;
     submitBtn.disabled = true;
@@ -111,6 +114,7 @@ export async function renderLogin(app, { query } = {}) {
       }
       toast(err instanceof ApiError ? err.message : "Erreur de connexion", "error");
     } finally {
+      submitting = false;
       submitBtn.disabled = false;
     }
   });

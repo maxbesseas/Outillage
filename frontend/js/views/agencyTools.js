@@ -74,7 +74,7 @@ export async function renderAgencyTools(app) {
       <h1>Agence — Outillage &amp; EPI</h1>
       <div class="section-links">
         ${isManager() ? '<a href="#/garanties">Garanties</a>' : ""}
-        <button class="btn btn-sm" id="export-btn">Exporter en Excel</button>
+        ${isManager() ? '<button class="btn btn-sm" id="export-btn">Exporter en Excel</button>' : ""}
       </div>
     </div>
 
@@ -242,7 +242,7 @@ export async function renderAgencyTools(app) {
     renderAgencyTools(app);
   });
 
-  document.getElementById("export-btn").addEventListener("click", () => {
+  document.getElementById("export-btn")?.addEventListener("click", () => {
     api.download("/agency-tools/export", "Outillage.xlsx").catch((err) => {
       toast(err instanceof ApiError ? err.message : "Erreur export", "error");
     });

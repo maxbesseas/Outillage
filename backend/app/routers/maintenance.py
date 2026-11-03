@@ -491,7 +491,7 @@ def _stock_item(db: Session, user: User, item_id: int) -> StockItem:
 
 @stock_router.get("/items")
 def list_stock(low_only: bool = False, include_inactive: bool = False, db: Session = Depends(get_db),
-               current_user: User = Depends(get_current_user)):
+               current_user: User = Depends(get_current_manager)):
     query = db.query(StockItem)
     if current_user.role != UserRole.admin:
         query = query.filter(StockItem.agency_number == current_user.agency_number)
@@ -561,7 +561,7 @@ def add_movement(item_id: int, payload: MovementIn, db: Session = Depends(get_db
 
 
 @stock_router.get("/items/{item_id}/movements")
-def list_movements(item_id: int, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def list_movements(item_id: int, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_manager)):
     _stock_item(db, current_user, item_id)
     names = _names(db)
     rows = db.query(StockMovement).filter(StockMovement.item_id == item_id).order_by(StockMovement.id.desc()).limit(max(1, min(limit, 500))).all()

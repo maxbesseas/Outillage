@@ -17,6 +17,7 @@ import { icon } from "../icons.js";
 const CONTROL_MAX_AGE_DAYS = 365;
 const LOSS_REASONS = { vol: "Vol", casse: "Casse", perte: "Perte" };
 
+const PAGE_SIZE = 100;
 let currentTab = "todo";
 
 function isOverdue(lastControlDate) {
@@ -59,8 +60,9 @@ async function draw(app) {
     </div>
 
     <div id="inv-list">
-      ${filtered.length ? filtered.map((t) => toolCard(t)).join("") : `<div class="empty-state">Rien à contrôler.</div>`}
+      ${filtered.length ? filtered.slice(0, PAGE_SIZE).map((t) => toolCard(t)).join("") : `<div class="empty-state">Rien à contrôler.</div>`}
     </div>
+    ${filtered.length > PAGE_SIZE ? `<div class="load-more"><button class="btn" id="inv-more">Afficher plus (${PAGE_SIZE} sur ${filtered.length})</button></div>` : ""}
   `;
 
   document.querySelectorAll("#inv-tabs button").forEach((btn) => {
@@ -84,12 +86,23 @@ async function draw(app) {
     });
   });
 
-  document.querySelectorAll("#inv-list [data-tool-id]").forEach((card) => {
+  let shown = Math.min(PAGE_SIZE, filtered.length);
+  document.getElementById("inv-more")?.addEventListener("click", (e) => {
+    document.getElementById("inv-list").insertAdjacentHTML("beforeend", filtered.slice(shown, shown + PAGE_SIZE).map((t) => toolCard(t)).join(""));
+    shown = Math.min(shown + PAGE_SIZE, filtered.length);
+    if (shown >= filtered.length) e.target.closest(".load-more").remove();
+    else e.target.textContent = `Afficher plus (${shown} sur ${filtered.length})`;
+    bindCards();
+  });
+
+  const bindCards = () => document.querySelectorAll("#inv-list [data-tool-id]:not([data-bound])").forEach((card) => {
+    card.dataset.bound = "1";
     const id = Number(card.dataset.toolId);
     const tool = filtered.find((t) => t.id === id);
     card.querySelector('[data-action="control"]').addEventListener("click", () => openControlForm(tool, () => draw(app)));
     card.querySelector('[data-action="history"]').addEventListener("click", () => openToolHistory("agency", id, tool.name));
   });
+  bindCards();
 }
 
 function toolCard(t) {

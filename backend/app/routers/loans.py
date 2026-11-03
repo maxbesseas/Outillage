@@ -113,6 +113,14 @@ def _view(loan: Loan) -> dict:
     }
 
 
+def _view_for(user: User, loan: Loan) -> dict:
+    """Le personnel de chantier voit qui a quel outil et sur quel chantier, pas les commentaires ni les signatures des autres."""
+    data = _view(loan)
+    if user.role == UserRole.gars_chantier and user.id not in (loan.borrower_id, loan.created_by_id):
+        data.update(comment=None, comment_return=None, approval_comment=None, photo_return_path=None, signed_at=None, signed_name=None, has_signature=False)
+    return data
+
+
 def _fail(message: str, code: int = status.HTTP_400_BAD_REQUEST):
     raise HTTPException(status_code=code, detail=message)
 
@@ -262,7 +270,7 @@ def list_loans(
     query = query.order_by(Loan.start_datetime.desc(), Loan.id.desc())
     if limit is not None:
         query = query.offset(max(offset, 0)).limit(max(1, min(limit, 500)))
-    return [_view(l) for l in query.all()]
+    return [_view_for(current_user, l) for l in query.all()]
 
 
 @router.get("/pending-approval")
@@ -384,7 +392,7 @@ def get_series(series_id: str, db: Session = Depends(get_db), current_user: User
     if not loans:
         _fail("Série introuvable", status.HTTP_404_NOT_FOUND)
     _ensure_view(db, current_user, loans[0])
-    return [_view(l) for l in loans]
+    return [_view_for(current_user, l) for l in loans]
 
 
 @router.patch("/series/{series_id}")
@@ -445,13 +453,13 @@ def cancel_series(series_id: str, db: Session = Depends(get_db), current_user: U
 def get_loan(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     loan = _loan_or_404(db, loan_id)
     _ensure_view(db, current_user, loan)
-    return _view(loan)
+    return _view_for(current_user, loan)
 
 
 @router.get("/{loan_id}/events")
 def loan_events(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     loan = _loan_or_404(db, loan_id)
-    _ensure_view(db, current_user, loan)
+    _ensure_manage(db, current_user, loan)
     names = {u.id: u.full_name for u in db.query(User).all()}
     rows = db.query(LoanEvent).filter(LoanEvent.loan_id == loan.id).order_by(LoanEvent.id).all()
     return [{"id": e.id, "kind": e.kind, "user_id": e.user_id, "user_name": names.get(e.user_id),
@@ -699,7 +707,7 @@ def _voucher_bytes(db: Session, loan: Loan) -> bytes:
 @router.get("/{loan_id}/voucher.pdf")
 def loan_voucher(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     loan = _loan_or_404(db, loan_id)
-    _ensure_view(db, current_user, loan)
+    _ensure_manage(db, current_user, loan)
     return Response(_voucher_bytes(db, loan), media_type="application/pdf",
                     headers={"Content-Disposition": f'attachment; filename="bon-de-sortie-{loan.id}.pdf"'})
 
@@ -725,7 +733,7 @@ def email_voucher(loan_id: int, payload: EmailIn, response: Response, db: Sessio
 @router.get("/{loan_id}/ics")
 def loan_ics(loan_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     loan = _loan_or_404(db, loan_id)
-    _ensure_view(db, current_user, loan)
+    _ensure_manage(db, current_user, loan)
     tool = _tool_of(db, loan)
     body = ics.calendar([ics.event(f"loan-{loan.id}@fauche", loan.start_datetime, loan.end_datetime_planned,
                                    f"Réservation : {tool.name}", loan.comment or "", loan.site or "")])

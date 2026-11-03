@@ -3,8 +3,49 @@ import { escapeHtml, formatDateTime, toast } from "../ui.js";
 
 const PAGE_SIZE = 50;
 
+const DETAIL_LABELS = {
+  username: "Identifiant", identifier: "Identifiant", reason: "Motif", fields: "Champs", from: "De", to: "Vers", source: "Origine", agency: "Agence", role: "Rôle",
+  name: "Nom", code: "Code", dataset: "Données", format: "Format", rows: "Lignes", count: "Nombre", method: "Méthode", kind: "Nature", tool_kind: "Type d'outil", tool_id: "Outil",
+  version: "Version", file: "Fichier", target: "Cible", deactivated: "Désactivé",
+};
+
+function detailValue(value) {
+  if (typeof value === "boolean") return value ? "oui" : "non";
+  if (Array.isArray(value)) return value.join(", ");
+  if (value && typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function formatDetails(raw) {
+  let parsed;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return raw;
+  return Object.entries(parsed)
+    .filter(([, value]) => value !== null && value !== undefined && value !== "")
+    .map(([key, value]) => `${DETAIL_LABELS[key] || key} : ${detailValue(value)}`)
+    .join(" · ");
+}
+
 const ACTION_LABELS = {
   login_success: "Connexion",
+  access_denied: "Accès refusé",
+  tool_status_changed: "Statut d'outil modifié",
+  agency_tool_updated: "Outil d'agence modifié",
+  personal_tool_updated: "Outil personnel modifié",
+  epi_updated: "EPI modifié",
+  tool_photo_added: "Photo d'outil ajoutée",
+  tool_photo_deleted: "Photo d'outil supprimée",
+  export: "Export de données",
+  export_registry: "Export du registre de contrôle",
+  report_read: "Lecture d'un rapport par clé d'API",
+  charter_accepted: "Charte acceptée",
+  mfa_enabled: "Double authentification activée",
+  mfa_disabled: "Double authentification désactivée",
+  mfa_reset_by_admin: "Double authentification réinitialisée",
   login_failed: "Connexion échouée",
   logout: "Déconnexion",
   password_changed: "Mot de passe changé",
@@ -59,7 +100,7 @@ function row(entry) {
         <span>Objet : ${escapeHtml(object)}</span>
         <span>IP : ${escapeHtml(entry.ip || "-")}</span>
       </div>
-      ${entry.details ? `<div class="card-sub audit-details">${escapeHtml(entry.details)}</div>` : ""}
+      ${entry.details ? `<div class="card-sub audit-details">${escapeHtml(formatDetails(entry.details))}</div>` : ""}
     </div>`;
 }
 

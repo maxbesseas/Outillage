@@ -52,13 +52,21 @@ async function draw(app) {
     }
     const reassignBtn = card.querySelector('[data-action="reassign"]');
     if (reassignBtn) {
-      reassignBtn.addEventListener("click", () => {
+      reassignBtn.addEventListener("click", async () => {
         const source = team.find((u) => u.id === id);
         const candidates = team.filter((u) => u.id !== id && u.is_active && (isAdmin() || u.agency_number === source.agency_number));
         if (!candidates.length) {
           toast("Aucun collègue disponible pour recevoir le matériel", "error");
           return;
         }
+        let moving;
+        try {
+          moving = (await api.get(`/users/${id}/departure-summary`)).reassignable;
+        } catch (err) {
+          toast(err instanceof ApiError ? err.message : "Erreur", "error");
+          return;
+        }
+        const movingTotal = moving.personal_tools + moving.epi + moving.dotations;
         openModal(`
           <div class="modal-header"><div class="card-title">Réaffecter le matériel de ${escapeHtml(source.full_name)}</div>
             <button class="btn btn-ghost btn-sm" id="reassign-close">Fermer</button></div>
@@ -66,7 +74,8 @@ async function draw(app) {
             <p class="card-sub">Ses outils personnels détenus, EPI assignés et dotations passent au collègue choisi. Les réservations en cours ne sont pas modifiées.</p>
             <div class="field"><label>Nouveau détenteur</label>
               <select name="to">${candidates.map((u) => `<option value="${u.id}">${escapeHtml(u.full_name)}</option>`).join("")}</select></div>
-            <button type="submit" class="btn btn-primary">Réaffecter</button>
+            <p class="card-sub" id="reassign-recap"><strong>${movingTotal ? `Sera transféré : ${moving.personal_tools} outil(s) personnel(s), ${moving.epi} EPI et ${moving.dotations} dotation(s).` : "Cette personne n'a aucun matériel à réaffecter."}</strong></p>
+            <button type="submit" class="btn btn-primary" ${movingTotal ? "" : "disabled"}>Réaffecter</button>
           </form>
         `, {
           onMount: (root) => {

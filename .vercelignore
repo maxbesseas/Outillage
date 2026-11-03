@@ -23,3 +23,4 @@ backend/seed_demo.py
 backend/sql/
 .github/
 QA_REPORT.md
+backend/reset_admin.py

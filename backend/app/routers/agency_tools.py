@@ -25,6 +25,14 @@ def _ascii_header_safe(text: str) -> str:
     return unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
 
 
+def _tool_view(tool: AgencyTool, user: User) -> schemas.AgencyToolOut:
+    """Les montants restent réservés aux responsables, comme l'écran Finances."""
+    view = schemas.AgencyToolOut.model_validate(tool)
+    if user.role == UserRole.gars_chantier:
+        return view.model_copy(update={"purchase_price": None, "daily_rate": None, "residual_value": None})
+    return view
+
+
 def _scope_query(query, current_user: User):
     if current_user.role == UserRole.admin:
         return query
@@ -76,7 +84,7 @@ def list_agency_tools(
     query = query.order_by(AgencyTool.name, AgencyTool.id)
     if limit is not None:
         query = query.offset(max(offset, 0)).limit(max(1, min(limit, 500)))
-    return query.all()
+    return [_tool_view(t, current_user) for t in query.all()]
 
 
 @router.get("/types", response_model=list[str])
@@ -134,7 +142,7 @@ def financial_summary(db: Session = Depends(get_db), current_user: User = Depend
 
 
 @router.get("/export")
-def export_agency_tools(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def export_agency_tools(request: Request, db: Session = Depends(get_db), current_user: User = Depends(get_current_manager)):
     tools = _scope_query(db.query(AgencyTool), current_user).order_by(AgencyTool.name).all()
     audit.record(db, "export_agency_tools", current_user.id, "agency_tool", None, request, {"count": len(tools)})
     db.commit()
@@ -189,7 +197,7 @@ def create_agency_tool(
 
 @router.get("/{tool_id}", response_model=schemas.AgencyToolOut)
 def get_agency_tool(tool_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    return _get_scoped_or_404(db, tool_id, current_user)
+    return _tool_view(_get_scoped_or_404(db, tool_id, current_user), current_user)
 
 
 @router.patch("/{tool_id}", response_model=schemas.AgencyToolOut)
@@ -327,7 +335,7 @@ def control_agency_tool(
     else:
         response.headers["X-Notification"] = "ok"
 
-    return tool
+    return _tool_view(tool, current_user)
 
 
 @router.post("/{tool_id}/photo", response_model=schemas.AgencyToolOut)
@@ -341,7 +349,7 @@ def upload_agency_tool_photo(
     tool.photo_path = save_upload_file(file, "agency_tools")
     db.commit()
     db.refresh(tool)
-    return tool
+    return _tool_view(tool, current_user)
 
 
 @router.delete("/{tool_id}", status_code=status.HTTP_204_NO_CONTENT)

@@ -149,9 +149,9 @@ export async function renderBudgets(app) {
   const b = await api.get(`/finance/budgets?year=${budgetYear}`);
   const canEdit = state.user.role === "admin" || state.user.role === "directeur_agence";
   app.innerHTML = `
-    <div class="section-header"><h1>Budgets</h1><select id="b-year">${[-1, 0, 1].map((d) => `<option ${budgetYear === new Date().getFullYear() + d ? "selected" : ""}>${new Date().getFullYear() + d}</option>`).join("")}</select></div>${tabs("/finances/budgets")}
+    <div class="section-header"><h1>Budgets</h1><select id="b-year" aria-label="Année">${[-1, 0, 1].map((d) => `<option ${budgetYear === new Date().getFullYear() + d ? "selected" : ""}>${new Date().getFullYear() + d}</option>`).join("")}</select></div>${tabs("/finances/budgets")}
     <div class="table-wrap"><table class="data-table"><thead><tr><th>Poste</th><th>Budget</th><th>Réalisé</th><th>Reste</th><th>Consommé</th></tr></thead><tbody>
-      ${b.rows.map((r) => `<tr><td>${CATEGORY[r.category]}</td><td>${canEdit ? `<input class="inline-num" type="number" min="0" step="10" data-cat="${r.category}" value="${r.planned}"/>` : euro(r.planned)}</td>
+      ${b.rows.map((r) => `<tr><td>${CATEGORY[r.category]}</td><td>${canEdit ? `<input class="inline-num" aria-label="Budget ${escapeHtml(CATEGORY[r.category])}" type="number" min="0" step="10" data-cat="${r.category}" value="${r.planned}"/>` : euro(r.planned)}</td>
         <td>${euro(r.actual)}</td><td class="${r.remaining < 0 ? "neg" : ""}">${euro(r.remaining)}</td><td>${r.consumed_pct === null ? "-" : `${r.consumed_pct} %`}</td></tr>`).join("")}
       <tr><th>Total</th><th>${euro(b.planned_total)}</th><th>${euro(b.actual_total)}</th><th></th><th></th></tr>
     </tbody></table></div>

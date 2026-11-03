@@ -355,7 +355,7 @@ class AgencyToolOut(BaseModel):
     description: Optional[str] = None
     serial_number: Optional[str] = None
     purchase_date: Optional[datetime] = None
-    purchase_price: float
+    purchase_price: Optional[float] = None
     warranty_expiration_date: Optional[datetime] = None
     comment: Optional[str] = None
     last_control_date: Optional[datetime] = None

@@ -83,6 +83,10 @@ def departure_summary(user_id: int, db: Session = Depends(get_db), current_user:
     items = _items(db, user.id)
     return {
         "user": {"id": user.id, "full_name": user.full_name, "role": user.role.value, "agency_number": user.agency_number},
+        "reassignable": {
+            "personal_tools": db.query(PersonalTool).filter(PersonalTool.current_holder_id == user.id).count(),
+            "epi": len(items["epi"]), "dotations": len(items["dotations"]),
+        },
         "owned_tools": [{"id": t.id, "name": t.name, "code": t.unique_code} for t in items["owned_tools"]],
         "held_tools": [{"id": t.id, "name": t.name, "code": t.unique_code} for t in items["held_tools"]],
         "epi": [{"id": e.id, "name": e.name, "code": e.unique_code} for e in items["epi"]],
